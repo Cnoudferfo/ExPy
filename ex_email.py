@@ -8,7 +8,7 @@ def extract(count):
     """Get emails from outlook."""
     items = []
     outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
-    inbox = outlook.GetDefaultFolder(5)  # "6" refers to the inbox
+    inbox = outlook.GetDefaultFolder(6)  # "6" refers to the inbox
     messages = inbox.Items
     message = messages.GetFirst()
     i = 0
