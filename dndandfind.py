@@ -8,7 +8,8 @@ from datetime import datetime
 
 # Initialize the main window
 root = tkinterDnD.Tk()
-root.title("Email Attachment Saver")
+root.title("Drag & drop emails from outlook to save attachments.")
+root.geometry('600x300')
 
 # Load the save path from a JSON file
 save_path = ""
@@ -26,6 +27,9 @@ stringvar.set('Drop an email here!')
 save_path_var = tk.StringVar()
 save_path_var.set(f"Save path: {save_path}" if save_path else "No save path set")
 
+thrhld_var = tk.StringVar()
+thrhld_var.set(f"Time threshold : {time_threashold_seconds} seconds")
+
 def drop(event):  # On dnd's drop event
     global save_path
     if not save_path:
@@ -34,11 +38,9 @@ def drop(event):  # On dnd's drop event
 
     try:
         dropped_data = event.data.split('\n')    # Split to an array of two strings
-        # print(f"dropped_data = {dropped_data}")  # Check the event data
         dict_head = dropped_data[0].strip().split('\t')
         dict_data = dropped_data[1].strip().split('\t')
         dd_dict = dict(zip(dict_head, dict_data))
-        # print(f"dd_dict={dd_dict}")
         dd_sender = dd_dict['寄件者']
         dd_subject = dd_dict['主旨']
         dd_locrxt = dd_dict['收到日期'].replace("下午", "PM").replace("上午", "AM")
@@ -106,6 +108,9 @@ browse_button.pack(pady=10)
 
 save_path_label = ttk.Label(root, textvar=save_path_var, padding=10)
 save_path_label.pack(pady=10)
+
+thrhld_label = ttk.Label(root, textvar=thrhld_var, padding=10)
+thrhld_label.pack(pady=0)
 
 # Start the main loop
 root.mainloop()
