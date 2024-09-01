@@ -1,5 +1,20 @@
 import tkinter as tk
 from tkinter import font
+import os
+import os.path
+from pathlib import Path
+import json
+
+save_path = "../"
+config_file = "config.json"
+if os.path.exists(config_file):
+    with open(config_file, 'r') as f:
+        config = json.load(f)
+        save_path = config.get("save_path", "")
+
+paths = Path(save_path).glob('*.*')
+# for p in paths:
+#     print(f"p={p.name}")
 
 root = tk.Tk()
 root.title('tkLabo')
@@ -21,10 +36,14 @@ line_height = label_font.metrics("linespace")
 padding = line_height // 8
 
 # Add labels to the frame
-texts = [f"Text {i}" for i in range(100)]
-for text in texts:
-    label = tk.Label(main_frame, text=text, font=label_font)
-    label.pack(pady=(padding, 0))
+texts = [f"-{p.name}" for p in paths]
+labels = [tk.Label(main_frame, text=t, font=label_font, anchor='w') for t in texts]
+def lcommand(evnt):
+    print(f"Label clicked {evnt}")
+    labels.pop(len(labels)-1).destroy()
+for label in labels:
+    label.pack(pady=(padding, 0), anchor='nw')
+    label.bind("<Button-1>", lcommand)
 
 # Configure the canvas and frame to work with the scrollbar
 main_frame.update_idletasks()
