@@ -4,13 +4,14 @@ from tkinter import font
 from tkinter import ttk
 import tkinterDnD
 from PIL import Image
-import pytesseract as ts
 import pymupdf as pmpdf
 import re  # To use regular expression
 import json
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import my_util as cu
+
+ot = None              # To initialize ot, which is a ocr object (tesseract or easyocr)
 
 def load_config(fpth):
     with open(fpth, 'r', encoding='utf-8') as f:
@@ -39,16 +40,28 @@ def disp_text_widget(txt_wdgt, str):
 
 # Parse a pdf page's text strings
 def parse_a_pdf_page_at_zoom(page, zoom=1.2):
-    if not isinstance(page, pmpdf.Page):
+    global ot
+    if not isinstance(page, pmpdf.Page, ):
         raise ValueError("parse_a_pdf_page_at_zoom() must receive a PyMuPDF page object")
     mtrx = pmpdf.Matrix(zoom, zoom)  # To set a zoomed matrix
     page_pix = page.get_pixmap(matrix=mtrx)  # To get pixmap of page
     page_img = Image.frombytes("RGB", [page_pix.width, page_pix.height], page_pix.samples)  # Convert pixmap to image
-    page_str = ts.image_to_string(page_img, lang='chi_tra')  # To perform OCR
+    page_str = ot.ReadImage(page_img)
     return page_str.split('\n')
 
 def main():
-    print(f"Dbg: cwd={os.getcwd()}")
+    global ot
+    if len(sys.argv) == 2 and sys.argv[1] == 'use_tess':
+        import ocr_tesseract as ot
+    elif len(sys.argv) == 2 and sys.argv[1] == 'use_easyocr':
+        import ocr_easyocr as ot
+    else:
+        print(f"Usage: {__name__} ocr_option")
+        print(f"    ocr_option: [use_tess] tesseract, [use_easyocr] EasyOCR")
+        exit(0)
+    
+    ot.Init()  # To initialize ocr engine    
+
     try:
         ocr_cfg = load_config('config_ocr.json')
         titles, vendor_names, quotation_number = parse_config(ocr_cfg)
@@ -63,10 +76,8 @@ def main():
         print(f"Error: {e}")
         exit(-1)
 
-    ts.pytesseract.tesseract_cmd = r'D:\Tools\tesseract540\tesseract.exe'
-
     root = tkinterDnD.Tk()  
-    root.title("tkinterDnD example")
+    root.title("綜合PDF整理器")
     root.geometry("1000x750")  # Adjust the size as needed
 
     stringvar1 = tk.StringVar()
@@ -95,10 +106,8 @@ def main():
                 pp_strs = parse_a_pdf_page_at_zoom(page=pp, zoom=1.2)  # To parse this page to strings
                 text += f"Dbg: page{i} : {len(pp_strs)} strings \n"
                 for s in pp_strs:
-                    if s != '':
-                        # clean_str = s.strip().replace(' ','').replace('\t','')
+                    if s != '':                        
                         clean_str = cu.remove_all_whitespaces(s)
-                        # print(f"Page{i} : {clean_str}, quo_num={extract_quotation_number(clean_str)}")
                         print(f"Dbg: page{i} : {clean_str}")
                 
                 # To update progress bar
