@@ -5,7 +5,7 @@ import re
 def remove_all_whitespaces(s):
     return re.sub(r'\s+', '', s)
 
-def  string_similarity(str1, str2):
+def string_similarity(str1, str2):
     the_len = max((len(str1), len(str2)))
     str1 = str1 + ' '*(the_len - len(str1))
     str2 = str2 + ' '*(the_len - len(str2))
