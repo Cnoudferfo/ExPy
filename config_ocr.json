@@ -1,7 +1,7 @@
 {
     "Attributes": {
-        "titles": ["模具檢查表", "修繕報價單", "發票"],
-        "vendor names": ["這一家", "那一家", "大間", "小家", "別家"],
-        "quotation number": ["估價單編號"]
+        "titles": ["模具付款申請廠商確認書", "電子發票證明聯", "檢查結果連絡書"],
+        "vendor names": ["翔鎰", "元譽", "威盈"],
+        "quotation number": ["估價單NO"]
     }
 }

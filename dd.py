@@ -5,8 +5,6 @@ import json
 import os
 import win32com.client  # Make sure to install pywin32
 from datetime import datetime
-# import unicodedata
-# import chardet
 
 # Initialize the main window
 root = tkinterDnD.Tk()
@@ -37,22 +35,13 @@ def drop(event):  # On dnd's drop event
     if not save_path:
         stringvar.set("Please select a save path first!")
         return
-    # def normalize(str):
-    #     return unicodedata.normalize('NFC', str)
     try:
         dropped_data = event.data.split('\n')    # Split to an array of two strings
-        # dropped_data = event.data.encode('latin1').decode('utf-8').split('\n')
-        # detected_encode = chardet.detect(event.data.encode())['encoding']
-        # print(f"detected_encode={detected_encode}")
-        # dropped_data = event.data.encode(detected_encode).decode('utf-8').split('\n')
-        # dropped_data = event.data.encode('utf-8').decode('utf-8').split('\n')
         dict_head = dropped_data[0].strip().split('\t')
         dict_data = dropped_data[1].strip().split('\t')
         dd_dict = dict(zip(dict_head, dict_data))
         dd_sender = dd_dict['寄件者']
         dd_subject = dd_dict['主旨']
-        # dd_sender = normalize(dd_dict['寄件者'])
-        # dd_subject = normalize(dd_dict['主旨'])
         dd_locrxt = dd_dict['收到日期'].replace("下午", "PM").replace("上午", "AM")
         
         loc_parse = datetime.strptime(dd_locrxt, "%Y/%m/%d %p %I:%M")
@@ -79,26 +68,21 @@ def drop(event):  # On dnd's drop event
             msg_rxt = msg.ReceivedTime
             msg_date = msg_rxt.strftime("%Y-%m-%d")
             msg_time = msg_rxt.strftime("%H:%M:%S")
-            # msg_subj = normalize(msg.Subject)
-            # msg_sndr = normalize(msg.SenderName)
             print(f"Checking email: Subject: {msg.Subject}, From: {msg.SenderName}, Received: {msg_date} {msg_time}, Attachment: {msg.Attachments}")
             if(dd_date != msg_date):
                 print(f"pass this email, dd_date={dd_date}, msg_date={msg_date}")
                 continue
             time_diff = abs(time_to_seconds(dd_time) - time_to_seconds(msg_time))
             if(time_diff > time_threashold_seconds):
-                if i < 5:
+                if i < 500:
                     print(f"pass this email, time_diff={time_diff} > threshold:{time_threashold_seconds}")
                     i = i + 1
                 else:
-                    stringvar.set("Quit for quick debug!")
+                    stringvar.set(f"Quit for quick debug! search only in {i} items.")
                     break
                 continue
-            # if (dd_subject in msg.Subject and dd_sender in msg.SenderName):
-            # if (dd_sender in msg.SenderName):
             ss_subj = str_similarity(dd_subject, msg.Subject)
             ss_sndr = str_similarity(dd_sender, msg.SenderName)
-            # if (dd_subject in msg_subj and dd_sender in msg_sndr):
             if (ss_subj > 0.2 and ss_sndr > 0.2):
                 print("Email found")
                 if msg.Attachments.Count > 0:

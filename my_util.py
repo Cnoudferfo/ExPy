@@ -1,15 +1,56 @@
 # mylib.py
 # Chiaming's handy python library
 import re
+import json
+
+def load_config(fpth):
+    with open(fpth, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+    return config
+
+def parse_config(config):
+    attr = config.get('Attributes',{})
+    result = {
+        'titles' : attr.get('titles',[]),
+        'vendor names' : attr.get('vendor names',[]),
+        'quotation number' : attr.get('quotation number',[])
+    }
+    return result
+
+def loadPageAttrFromJson():
+    try:
+        ocr_cfg = load_config('config_ocr.json')
+        dic_config = parse_config(ocr_cfg)
+        print("Attributes:")
+        for t in dic_config['titles']:
+            print(f"{t}")
+        for vn in dic_config['vendor names']:
+            print(f"{vn}")
+        for qn in dic_config['quotation number']:
+            print(f"{qn}")
+        return dic_config
+    except Exception as e:
+        print(f"makeAttrDic() Error! {e}")
+        return None
 
 def remove_all_whitespaces(s):
     return re.sub(r'\s+', '', s)
 
-def string_similarity(str1, str2):
-    the_len = max((len(str1), len(str2)))
-    str1 = str1 + ' '*(the_len - len(str1))
-    str2 = str2 + ' '*(the_len - len(str2))
-    return sum(1 if i == j else 0 for i, j in zip(str1, str2)) / float(the_len)
+def matchTokenAndTest(tokenStr, testStr):
+    # First test string_similarity
+    max_len = max((len(tokenStr), len(testStr)))
+    tokenNorm = tokenStr + ' '*(max_len - len(tokenStr))
+    testNorm = testStr + ' '*(max_len - len(testStr))
+    the_ss = sum(1 if i == j else 0 for i, j in zip(tokenNorm, testNorm)) / float(max_len)
+    if the_ss > 0.05:
+        return 1.0
+    # Next, test str in str
+    elif tokenStr in testStr:
+        return 1.0
+    else:
+        # Finally, return 0, No hit!
+        return 0.0
+    
 
 def extract_quotation_number(text, prefix):
     # match = re.search(r'估價單編號:(\d+)', text)
@@ -17,60 +58,94 @@ def extract_quotation_number(text, prefix):
     pattern = re.escape(prefix) + r':(\d+)'
     match = re.search(pattern, text)
     if match:
-        return match.group(1)
+        return str(match.group(1))
     return None
 
 
-def extract_page_attributes(attr_dic, page_strings):
+def testAttrTokens(attr_dic, page_strings):
     Titles = attr_dic['titles']
-    print(f"Dbg: Titles={Titles}")
     VendorNames = attr_dic['vendor names']
-    print(f"Dbg: VendorNames={VendorNames}")
     QuotationNumber = attr_dic['quotation number']
-    print(f"Dbg: QuotationNumber={QuotationNumber}")
     TitleInPage = ''            
     VnInPage = ''
     QnInPage = ''
+    theHit = False
     for str in page_strings:
         # clean_str = str.strip().replace(' ','')
         clean_str = remove_all_whitespaces(str)
-        print(f"Dbg: clean_str={clean_str}")
         if TitleInPage == '':
             for t in Titles:
-                ss = string_similarity(t, clean_str)
-                print(f"Dbg: t={t}, clean_str={clean_str}, ss={ss}")
-                if(ss > 0.2):
+                ss = matchTokenAndTest(tokenStr=t, testStr=clean_str)                
+                if(ss > 0.0):
                     TitleInPage = t
+                    theHit = True
+                    print(f"Dbg:testAttrTokens() Hit! t={t}, clean_str={clean_str}")
                     break
         if VnInPage == '':
             for v in VendorNames:
-                ss = string_similarity(v, clean_str)
-                print(f"Dbg: v={v}, clean_str={clean_str}, ss={ss}")
-                if(ss > 0.2):
+                ss = matchTokenAndTest(tokenStr=v, testStr=clean_str)
+                if(ss > 0.0):
                     VnInPage = v
+                    theHit = True
+                    print(f"Dbg:testAttrTokens() Hit! v={v}, clean_str={clean_str}")
                     break
         
         if QnInPage == '':
             for q in QuotationNumber:
-                ss = string_similarity(q, clean_str)
-                print(f"Dbg: q={q}, clean_str={clean_str}, ss={ss}")
-                if(ss > 0.2):
+                ss = matchTokenAndTest(tokenStr=q, testStr=clean_str)
+                if(ss > 0.0):
                     QnInPage = extract_quotation_number(clean_str, q)
-                    break
-    return {'title':TitleInPage, 'vendor name':VnInPage, 'quotation number':QnInPage}
+                    if QnInPage != None and QnInPage.isnumeric():
+                        theHit = True
+                        print(f"Dbg:testAttrTokens() Hit! qn={QnInPage}, clean_str={clean_str}, ss={ss}")                
+                        break
+    if theHit == False:
+        return None
+    else:
+        return {'title':TitleInPage, 'vendor name':VnInPage, 'quotation number':QnInPage}
 
 def main():
-    p1_strs = ['Line1', ' companyA', 'Line2', 'Test report ', 'QN:506331']
-    p2_strs = ['Line1', 'companyA', 'Line2', 'Line3', ' Invoice', 'QN:506331']
-    p3_strs = ['Line1', ' companyB', 'Line2', 'Test report ', 'QN:506332']
-    p4_strs = ['Line1', 'companyB', 'Line2', 'Line3', ' Invoice', 'QN:506332']
-    a_dic = {
-        "titles": ["Test report", "Invoice", "Meeting minutes"],
-        "vendor names": ['companyA', 'companyB', 'companyC', 'companyD'],
-        "quotation number": ['QN']
-    }
-    dic_att = extract_page_attributes(a_dic, p1_strs)
-    print(f"title={dic_att['title']}, vendor name={dic_att['vendor name']}, quotation number={dic_att['quotation number']}")
+
+    # testSpecs = [{'zoom': 1.2, 'cw': 0},
+    #              {'zoom': 1.2, 'cw': 90},
+    #              {'zoom': 1.8, 'cw': 0},
+    #              {'zoom': 1.8, 'cw': 90}]
+    
+    # for testSpec in testSpecs:
+    #     print(f"zoom={testSpec['zoom']}, cw={testSpec['cw']}")
+
+    # exit(0)
+    
+    pages = []
+    pages.append(["模具付款申請廠商確認書", "翔鎰精密科技工業有限公司", "公司印", "估價單NO:240257"])
+    pages.append(["電子發票證明聯", "翔鎰精密科技工", "240257"])
+    pages.append(["檢查結果連絡書", "廠商 翔鎰精密科技工業有限公司", "頁數："])
+    pages.append(["xxxx", "oopopp", "noise"])
+    pages.append(["模具付款申請廠商確認書", "元譽精業有限公司", "公司印", "估價單NO:240258"])
+    pages.append(["電子發票證明聯", "元譽精業有限公", "240258"])
+    pages.append(["檢查結果連絡書", "廠商：元譽", "頁數："])
+    pages.append([",,,", "...", "==="])
+    pages.append(["模具付款申請廠商確認書", "元譽精業有限公司", "公司印", "估價單NO:240259"])
+    pages.append(["電子發票證明聯", "元譽精業有限公", "240259"])
+    pages.append(["檢查結果連絡書", "廠商：元譽", "頁數："])
+    pages.append(["333", "853", "00"])
+    pages.append(["模具付款申請廠商確認書", "威盈工業股份有限公司", "公司印", "估價單NO:240260"])
+    pages.append(["電子發票證明聯", "威盈工業股份有", "240260"])
+    pages.append(["檢查結果連絡書", "廠商：威盈", "頁數："])
+    pages.append(["XXJJ", "Z ZPU", "NOISE", "xxc", "yuyu"])
+        
+    a_dic = loadPageAttrFromJson()
+    if a_dic == None:
+        exit(-1)
+    
+    i=0
+    for page in pages:
+        i += 1
+        the_dic = testAttrTokens(attr_dic=a_dic, page_strings=page)
+        if the_dic == None:
+            print(f"page[{i}] No hit!")
+        else:
+            print(f"page[{i}] Hit! title={the_dic['title']}, vendor name={the_dic['vendor name']}, quotation number={the_dic['quotation number']}")
 
 if __name__ == "__main__":
     main()

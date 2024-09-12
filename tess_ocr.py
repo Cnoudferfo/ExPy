@@ -10,7 +10,7 @@ import re  # To use regular expression
 import json
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import my_util as cu
+import my_util as MyU
 
 def load_config(fpth):
     with open(fpth, 'r', encoding='utf-8') as f:
@@ -97,7 +97,7 @@ def main():
                 for s in pp_strs:
                     if s != '':
                         # clean_str = s.strip().replace(' ','').replace('\t','')
-                        clean_str = cu.remove_all_whitespaces(s)
+                        clean_str = MyU.remove_all_whitespaces(s)
                         # print(f"Page{i} : {clean_str}, quo_num={extract_quotation_number(clean_str)}")
                         print(f"Dbg: page{i} : {clean_str}")
                 
