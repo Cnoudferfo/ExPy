@@ -21,13 +21,13 @@ def loadPageAttrFromJson():
     try:
         ocr_cfg = load_config('config_ocr.json')
         dic_config = parse_config(ocr_cfg)
-        print("Attributes:")
-        for t in dic_config['titles']:
-            print(f"{t}")
-        for vn in dic_config['vendor names']:
-            print(f"{vn}")
-        for qn in dic_config['quotation number']:
-            print(f"{qn}")
+        # print("Attributes:")
+        # for t in dic_config['titles']:
+        #     print(f"{t}")
+        # for vn in dic_config['vendor names']:
+        #     print(f"{vn}")
+        # for qn in dic_config['quotation number']:
+        #     print(f"{qn}")
         return dic_config
     except Exception as e:
         print(f"makeAttrDic() Error! {e}")
@@ -50,18 +50,15 @@ def matchTokenAndTest(tokenStr, testStr):
     else:
         # Finally, return 0, No hit!
         return 0.0
-    
 
 def extract_quotation_number(text, prefix):
-    # match = re.search(r'估價單編號:(\d+)', text)
-    # match = re.search(r'QN:(\d+)', text)
     pattern = re.escape(prefix) + r':(\d+)'
     match = re.search(pattern, text)
     if match:
         return str(match.group(1))
     return None
 
-
+# To test the occurences of all attribution tokens in this page
 def testAttrTokens(attr_dic, page_strings):
     Titles = attr_dic['titles']
     VendorNames = attr_dic['vendor names']
@@ -70,6 +67,7 @@ def testAttrTokens(attr_dic, page_strings):
     VnInPage = ''
     QnInPage = ''
     theHit = False
+    # To iterate every string in this page
     for str in page_strings:
         # clean_str = str.strip().replace(' ','')
         clean_str = remove_all_whitespaces(str)
@@ -79,7 +77,7 @@ def testAttrTokens(attr_dic, page_strings):
                 if(ss > 0.0):
                     TitleInPage = t
                     theHit = True
-                    print(f"Dbg:testAttrTokens() Hit! t={t}, clean_str={clean_str}")
+                    # print(f"Dbg:testAttrTokens() Hit! t={t}, clean_str={clean_str}")
                     break
         if VnInPage == '':
             for v in VendorNames:
@@ -87,7 +85,7 @@ def testAttrTokens(attr_dic, page_strings):
                 if(ss > 0.0):
                     VnInPage = v
                     theHit = True
-                    print(f"Dbg:testAttrTokens() Hit! v={v}, clean_str={clean_str}")
+                    # print(f"Dbg:testAttrTokens() Hit! v={v}, clean_str={clean_str}")
                     break
         
         if QnInPage == '':
@@ -97,7 +95,7 @@ def testAttrTokens(attr_dic, page_strings):
                     QnInPage = extract_quotation_number(clean_str, q)
                     if QnInPage != None and QnInPage.isnumeric():
                         theHit = True
-                        print(f"Dbg:testAttrTokens() Hit! qn={QnInPage}, clean_str={clean_str}, ss={ss}")                
+                        # print(f"Dbg:testAttrTokens() Hit! qn={QnInPage}, clean_str={clean_str}, ss={ss}")                
                         break
     if theHit == False:
         return None

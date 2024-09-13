@@ -13,12 +13,6 @@ import my_util as MyU
 
 ot = None  # OCR object (tesseract or easyocr)
 
-def extract_quotation_number(text):
-    match = re.search(r'估價單編號:(\d+)', text)
-    if match:
-        return match.group(1)
-    return None
-
 # Dsiplay a string in text widget
 def disp_text_widget(txt_wdgt, str):
     txt_wdgt.config(state=tk.NORMAL)
@@ -29,8 +23,8 @@ def disp_text_widget(txt_wdgt, str):
 # Parse a pdf page's text strings
 def parse_a_page(page, zoom=1.2, cw = 0):  # cw : counter-clockwise rotation in 0-90-270-degree
     global ot
-    if not isinstance(page, pmpdf.Page, ):
-        raise ValueError("parse_a_pdf_page_at_zoom() must receive a PyMuPDF page object")
+    if not isinstance(page, pmpdf.Page):
+        raise ValueError("parse_a_page() must receive a PyMuPDF page object")
     page.set_rotation(cw)
     mtrx = pmpdf.Matrix(zoom, zoom)  # To set a zoomed matrix
     page_pix = page.get_pixmap(matrix=mtrx)  # To get pixmap of page
@@ -93,10 +87,11 @@ def main():
             # Define test specifications, zoom and cw rotation in degrees
             testSpecs = [{'zoom': 1.2, 'cw': 0},
                          {'zoom': 1.2, 'cw': 90},
-                         {'zoom': 1.8, 'cw': 0},
-                         {'zoom': 1.8, 'cw': 90}]
+                         {'zoom': 1.8, 'cw': 90},
+                         {'zoom': 1.8, 'cw': 0}]
             
-            # To prepare one page pdf filename
+            # To prepare one page pdf's filepath
+            # reset leading quotation number & vendor name
             lead_qn = ''
             lead_vn = ''
     
@@ -129,6 +124,7 @@ def main():
                         ret = save_one_page(filename = fpath, page = pp)
                         print(f"save_one_page({fpath},pp) returned {ret}")
                         # Reset the leading quotation number & vendor name
+                        # TODO : Overcome the reset condition of leading qn & vn
                         lead_qn = ''
                         lead_vn = ''
                     else:
