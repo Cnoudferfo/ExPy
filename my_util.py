@@ -21,6 +21,7 @@ def loadPageAttrFromJson():
     try:
         ocr_cfg = load_config('config_ocr.json')
         dic_config = parse_config(ocr_cfg)
+
         # print("Attributes:")
         # for t in dic_config['titles']:
         #     print(f"{t}")
@@ -28,6 +29,7 @@ def loadPageAttrFromJson():
         #     print(f"{vn}")
         # for qn in dic_config['quotation number']:
         #     print(f"{qn}")
+
         return dic_config
     except Exception as e:
         print(f"makeAttrDic() Error! {e}")
@@ -42,8 +44,9 @@ def matchTokenAndTest(tokenStr, testStr):
     tokenNorm = tokenStr + ' '*(max_len - len(tokenStr))
     testNorm = testStr + ' '*(max_len - len(testStr))
     the_ss = sum(1 if i == j else 0 for i, j in zip(tokenNorm, testNorm)) / float(max_len)
-    if the_ss > 0.05:
-        return 1.0
+    # TODO : Overcome string match logic
+    if the_ss > 0.5:
+        return the_ss
     # Next, test str in str
     elif tokenStr in testStr:
         return 1.0
@@ -58,26 +61,35 @@ def extract_quotation_number(text, prefix):
         return str(match.group(1))
     return None
 
+def ya_extract_qn(text, yy):
+    pattern = fr'{yy}\d{{4}}'
+    # print(f"pattern={pattern}")
+    match = re.search(pattern, text)
+    if match:
+        return str(match.group())
+    else:
+        return ''
+
 # To test the occurences of all attribution tokens in this page
 def testAttrTokens(attr_dic, page_strings):
     Titles = attr_dic['titles']
     VendorNames = attr_dic['vendor names']
     QuotationNumber = attr_dic['quotation number']
-    TitleInPage = ''            
+    TitleInPage = ''
     VnInPage = ''
     QnInPage = ''
     theHit = False
     # To iterate every string in this page
     for str in page_strings:
-        # clean_str = str.strip().replace(' ','')
         clean_str = remove_all_whitespaces(str)
+        msg_text = f"Dbg:testAttrTokens() To test clean_str={clean_str}"
         if TitleInPage == '':
             for t in Titles:
-                ss = matchTokenAndTest(tokenStr=t, testStr=clean_str)                
+                ss = matchTokenAndTest(tokenStr=t, testStr=clean_str)
                 if(ss > 0.0):
                     TitleInPage = t
                     theHit = True
-                    # print(f"Dbg:testAttrTokens() Hit! t={t}, clean_str={clean_str}")
+                    msg_text += f" Hit! t={t}"
                     break
         if VnInPage == '':
             for v in VendorNames:
@@ -85,9 +97,9 @@ def testAttrTokens(attr_dic, page_strings):
                 if(ss > 0.0):
                     VnInPage = v
                     theHit = True
-                    # print(f"Dbg:testAttrTokens() Hit! v={v}, clean_str={clean_str}")
+                    msg_text += f" Hit! v={v}"
                     break
-        
+
         if QnInPage == '':
             for q in QuotationNumber:
                 ss = matchTokenAndTest(tokenStr=q, testStr=clean_str)
@@ -95,8 +107,17 @@ def testAttrTokens(attr_dic, page_strings):
                     QnInPage = extract_quotation_number(clean_str, q)
                     if QnInPage != None and QnInPage.isnumeric():
                         theHit = True
-                        # print(f"Dbg:testAttrTokens() Hit! qn={QnInPage}, clean_str={clean_str}, ss={ss}")                
+                        msg_text += f" Hit! qn={QnInPage}"
                         break
+                else:
+                    QnInPage = ya_extract_qn(text=clean_str, yy="24")
+                    if QnInPage != '':
+                        theHit =True
+                        msg_text += f" Hit! qn={QnInPage}, use ya_extract"
+                        break
+
+        print(msg_text)
+
     if theHit == False:
         return None
     else:
@@ -108,12 +129,17 @@ def main():
     #              {'zoom': 1.2, 'cw': 90},
     #              {'zoom': 1.8, 'cw': 0},
     #              {'zoom': 1.8, 'cw': 90}]
-    
+
     # for testSpec in testSpecs:
     #     print(f"zoom={testSpec['zoom']}, cw={testSpec['cw']}")
 
     # exit(0)
-    
+
+    noisystr = "AWS1201H01A0-0H019903,909|240348"
+    theQn = ya_extract_qn(text=noisystr, yy="24")
+    print(f"theQn={theQn}")
+    exit(0)
+
     pages = []
     pages.append(["模具付款申請廠商確認書", "翔鎰精密科技工業有限公司", "公司印", "估價單NO:240257"])
     pages.append(["電子發票證明聯", "翔鎰精密科技工", "240257"])
@@ -131,11 +157,11 @@ def main():
     pages.append(["電子發票證明聯", "威盈工業股份有", "240260"])
     pages.append(["檢查結果連絡書", "廠商：威盈", "頁數："])
     pages.append(["XXJJ", "Z ZPU", "NOISE", "xxc", "yuyu"])
-        
+
     a_dic = loadPageAttrFromJson()
     if a_dic == None:
         exit(-1)
-    
+
     i=0
     for page in pages:
         i += 1

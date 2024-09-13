@@ -5,7 +5,7 @@ reader = None
 
 def Init():
     global reader
-    reader = easyocr.Reader(['ch_tra', 'en'])
+    reader = easyocr.Reader(['ch_tra', 'en'], gpu=False)
 
 def ReadImage(image):
     global reader
