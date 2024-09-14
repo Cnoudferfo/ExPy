@@ -44,15 +44,17 @@ def matchTokenAndTest(tokenStr, testStr):
     tokenNorm = tokenStr + ' '*(max_len - len(tokenStr))
     testNorm = testStr + ' '*(max_len - len(testStr))
     the_ss = sum(1 if i == j else 0 for i, j in zip(tokenNorm, testNorm)) / float(max_len)
-    # TODO : Overcome string match logic
-    if the_ss > 0.5:
-        return the_ss
-    # Next, test str in str
-    elif tokenStr in testStr:
-        return 1.0
-    else:
-        # Finally, return 0, No hit!
-        return 0.0
+    # TODO : Overcome the string match logic
+    # TODO : Overcome the string match threashold value
+    # if the_ss > 0.6:
+    #     return the_ss
+    # # Next, test str in str
+    # elif tokenStr in testStr:
+    #     return 1.0
+    # else:
+    #     # Finally, return 0, No hit!
+    #     return 0.0
+    return the_ss
 
 def extract_quotation_number(text, prefix):
     pattern = re.escape(prefix) + r':(\d+)'
@@ -86,38 +88,29 @@ def testAttrTokens(attr_dic, page_strings):
         if TitleInPage == '':
             for t in Titles:
                 ss = matchTokenAndTest(tokenStr=t, testStr=clean_str)
-                if(ss > 0.0):
+                if(ss > 0.6):
                     TitleInPage = t
                     theHit = True
-                    msg_text += f" Hit! t={t}"
+                    msg_text += f" Hit! t={t}, ss={ss}"
                     break
         if VnInPage == '':
             for v in VendorNames:
                 ss = matchTokenAndTest(tokenStr=v, testStr=clean_str)
-                if(ss > 0.0):
+                if(ss > 0.6) or (v in clean_str):
                     VnInPage = v
                     theHit = True
-                    msg_text += f" Hit! v={v}"
+                    msg_text += f" Hit! v={v}, ss={ss}"
                     break
-
         if QnInPage == '':
             for q in QuotationNumber:
-                ss = matchTokenAndTest(tokenStr=q, testStr=clean_str)
-                if(ss > 0.0):
-                    QnInPage = extract_quotation_number(clean_str, q)
+                if q in clean_str:
+                    QnInPage = ya_extract_qn(text = clean_str, yy = "24")
                     if QnInPage != None and QnInPage.isnumeric():
                         theHit = True
                         msg_text += f" Hit! qn={QnInPage}"
                         break
-                else:
-                    QnInPage = ya_extract_qn(text=clean_str, yy="24")
-                    if QnInPage != '':
-                        theHit =True
-                        msg_text += f" Hit! qn={QnInPage}, use ya_extract"
-                        break
-
-        print(msg_text)
-
+        # # To print debug message
+        # print(msg_text)
     if theHit == False:
         return None
     else:
@@ -134,6 +127,13 @@ def main():
     #     print(f"zoom={testSpec['zoom']}, cw={testSpec['cw']}")
 
     # exit(0)
+
+    token = "估價單"
+    test = "(估價單N0:240360)"
+    if token in test:
+        qn = ya_extract_qn(text=test, yy="24")
+    print(f"qn = {qn}")
+    exit(0)
 
     noisystr = "AWS1201H01A0-0H019903,909|240348"
     theQn = ya_extract_qn(text=noisystr, yy="24")

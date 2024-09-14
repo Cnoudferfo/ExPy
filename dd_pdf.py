@@ -14,9 +14,14 @@ import my_util as MyU
 ot = None  # OCR object (tesseract or easyocr)
 
 # Dsiplay a string in text widget
-def disp_text_widget(txt_wdgt, str):
+def tw_set_string(txt_wdgt, str):
     txt_wdgt.config(state=tk.NORMAL)
     txt_wdgt.delete(1.0, tk.END)
+    txt_wdgt.insert(tk.END, str)
+    txt_wdgt.config(state=tk.DISABLED)
+
+def tw_insert_string(txt_wdgt, str):
+    txt_wdgt.config(state=tk.NORMAL)
     txt_wdgt.insert(tk.END, str)
     txt_wdgt.config(state=tk.DISABLED)
 
@@ -29,8 +34,9 @@ def parse_a_page(page, zoom=1.2, cw = 0):  # cw : counter-clockwise rotation in 
     mtrx = pmpdf.Matrix(zoom, zoom)  # To set a zoomed matrix
     page_pix = page.get_pixmap(matrix=mtrx)  # To get pixmap of page
     img = Image.frombytes("RGB", [page_pix.width, page_pix.height], page_pix.samples)  # Convert pixmap to image
-    page_str = ot.ReadImage(img)
-    return page_str.split('\n')
+    page_str, page_cf = ot.ReadImage(img)
+
+    return page_str.split('\n'), page_cf
 
 # Save the page
 def save_one_page(filename='', page=None):
@@ -57,11 +63,11 @@ def main():
     global ot
     if len(sys.argv) == 2 and sys.argv[1] == 'use_tess':
         import ocr_tesseract as ot  # Warning! Not comply with python convention
-    elif len(sys.argv) == 2 and sys.argv[1] == 'use_easyocr':
+    elif len(sys.argv) == 2 and sys.argv[1] == 'use_easy':
         import ocr_easyocr as ot  # Warning! Not comply with python convention
     else:
         print(f"Usage: python {os.path.basename(__file__)} ocr_option")
-        print(f"    ocr_option: [use_tess] tesseract, [use_easyocr] EasyOCR")
+        print(f"    ocr_option: [use_tess] tesseract, [use_easy] EasyOCR")
         exit(-1)
 
     ot.Init()  # To initialize ocr engine
@@ -74,15 +80,11 @@ def main():
     root.title("綜合PDF整理器")
     root.geometry("1000x750")  # Adjust the size as needed
 
-    stringvar1 = tk.StringVar()
-    stringvar1.set('Drop here or drag from here!')
-
     def drop(event):  # This function is called, when stuff is dropped into a widget
-        stringvar1.set(f"Dropped object={event.data}")
         try:
             # Validate the dropped object
             if not os.path.isfile(event.data) or 'pdf' not in event.data:
-                disp_text_widget(text_widget, f"Wrong! {event.data} is NOT a pdf file!")
+                tw_set_string(text_widget, f"Wrong! {event.data} is NOT a pdf file!")
                 return
 
             pdf = pmpdf.open(event.data)  # To open pdf file
@@ -90,17 +92,17 @@ def main():
             # Before process a valid event
             progress_bar.config(mode='determinate', maximum=pdf.page_count)  # To set a progress bar
             progress_bar.start()
-            disp_text_widget(text_widget, 'Processing...')  # Update display message
+            tw_set_string(text_widget, f"{event.data}    processing...")  # Update display message
 
             text = 'OCR result ' + '\n'
             fpath = ''
 
             # Define test specifications, zoom and cw rotation in degrees
             # TODO : modify testSpecs according to the real pdf's page directions
-            testSpecs = [{'zoom': 1.5, 'cw': 0},
-                         {'zoom': 1.5, 'cw': 270},
-                         {'zoom': 1.8, 'cw': 270},
-                         {'zoom': 1.8, 'cw': 0}]
+            testSpecs = [{'zoom': 2.5, 'cw': 0},
+                         {'zoom': 2.5, 'cw': 90},
+                         {'zoom': 2.5, 'cw': 180},
+                         {'zoom': 2.5, 'cw': 270}]
 
             # To prepare one page pdf's filepath
             # reset leading quotation number & vendor name
@@ -108,14 +110,11 @@ def main():
             lead_vn = ''
 
             def IS_PASS_THIS_SPEC(page_number, test_count):
-                if (page_number % 4) == 0:
-                    use_spec = 1 # testSpecs[0] = cw0
-                elif (page_number % 3) == 0:
-                    use_spec = 2 # testSpecs[1] = cw270
-                elif (page_number % 2) == 0:
-                    use_spec = 2 # testSpecs[1] = cw270
+                if (page_number % 4) == 2 or (page_number % 4) == 3:
+                    use_spec = 4 # testSpecs[1] = cw270
                 else:
                     use_spec = 1 # testSpecs[0] = cw0
+
                 if test_count != use_spec:
                     return True
                 else:
@@ -130,20 +129,21 @@ def main():
                 for ts in testSpecs:   # To test a page in different specs if needed
                     j += 1
 
-                    # TODO : Remove this temp operation
-                    # Rotate the page according to test file's page placement
-                    if IS_PASS_THIS_SPEC(page_number=(i+1), test_count=j) == True:
-                        continue
+                    # # TODO : Remove this temp operation
+                    # # Rotate the page according to test file's page placement
+                    # if IS_PASS_THIS_SPEC(page_number=(i+1), test_count=j) == True:
+                    #     continue
+
+                    # Doubt about is multiple rotation damage the page image?
+                    ppcopy = pp
 
                     zoomV = ts['zoom']
                     cwV = ts['cw']
-                    print(f"drop():parse page{i+1} at zoom={zoomV}, cw={cwV}")
-                    pp_strs = parse_a_page(page=pp, zoom=zoomV, cw=cwV)  # To parse this page to strings
-
-                    # TEMP !
-                    save_one_page(filename=f"./test_data/real_uncover_p{i+1}.pdf", page=pp)
-                    # TEMP !
-
+                    # pp_strs = parse_a_page(page=pp, zoom=zoomV, cw=cwV)  # To parse this page to strings
+                    pp_strs, pp_cf = parse_a_page(page=ppcopy, zoom=zoomV, cw=cwV)  # To parse this page to strings
+                    print(f"drop(): page{i+1} parsed at zoom={zoomV}, cw={cwV}, strs_len={len(pp_strs)}, cf={pp_cf:.4f}")
+                    if pp_cf < 0.3:
+                        continue
                     tested_dic = MyU.testAttrTokens(attr_dic=attr_dic_from_json, page_strings=pp_strs)
                     if tested_dic != None:  # One of the age strings hit
                         t_qn = tested_dic['quotation number']
@@ -151,22 +151,22 @@ def main():
                         t_ti = tested_dic['title']
 
                         # TODO : To refine attribution registration logic
-                        # if t_qn != '' and lead_qn == '':
-                        #     lead_qn = t_qn
-                        # if t_vn != '' and lead_vn == '':
-                        #     lead_vn = t_vn
                         if lead_qn=='' and lead_vn=='':
                             if t_qn!='' and t_vn!='':
                                 lead_qn = t_qn
                                 lead_vn = t_vn
                         if lead_qn!='' and lead_vn!='':
                             if t_qn!='' and t_vn!='':
-                                if t_qn != lead_qn and t_vn != lead_vn:
+                                if t_qn != lead_qn:
                                     lead_qn = t_qn
                                     lead_vn = t_vn
 
-                        print(f"drop() page{i+1} hit! title={t_ti}, vendor name={t_vn}, quotation number={t_qn}")
-                        break
+                        # To prevent useless rotation
+                        if t_ti != '':
+                            print(f"drop() page{i+1} hit! title={t_ti}, vendor name={t_vn}, quotation number={t_qn}")
+                            break
+                        else:
+                            tested_dic = None
 
                 # TODO : Overcome NO HIT logic
                 # FOR NOW, LET "if tested_dic == None" BE THE NO HIT! CONDITION
@@ -175,13 +175,9 @@ def main():
                     if lead_qn != '' and lead_vn != '':
                         # To save one page file
                         fpath = f"./test_data/{lead_qn}_{lead_vn}_會議記錄.pdf"
-                        # ret = save_one_page(filename = fpath, page = pp)
-                        # print(f"save_one_page({fpath},pp) returned {ret}")
+                        # ret = save_one_page(filename = fpath, page = ppcopy)
+                        # print(f"save_one_page({fpath},ppcopy) returned {ret}")
 
-                        # Reset the leading quotation number & vendor name
-                        # DOING : Overcome the reset condition of leading qn & vn
-                        # lead_qn = ''
-                        # lead_vn = ''
                     else:
                         print("FATAL ERROR! NO HIT PAGE WITHOUT LEADING QN or VN!")
                 else:
@@ -191,27 +187,23 @@ def main():
                     if lead_qn != '' and lead_vn != '' and t_ti != '':
                         # To save the one page file
                         fpath = f"./test_data/{lead_qn}_{lead_vn}_{t_ti}.pdf"
-                        # ret = save_one_page(filename = fpath, page = pp)
-                        # print(f"save_one_page({fpath},pp) returned {ret}")
+                        # ret = save_one_page(filename = fpath, page = ppcopy)
+                        # print(f"save_one_page({fpath},ppcopy) returned {ret}")
                     else:
                         print("FATAL ERROR! HIT PAGE WITHOUT LEADING QN or VN!")
 
                 text += f"Dbg: page{i+1} was parsed {j} times, file={fpath} will be saved.\n"
-                # for s in pp_strs:
-                #     if s != '':
-                #         clean_str = MyU.remove_all_whitespaces(s)
-                #         print(f"Dbg: page{i} : {clean_str}")
 
                 # To update progress bar
                 progress_bar['value'] = i+1
                 root.update_idletasks()
 
             # To display OCR result
-            disp_text_widget(text_widget, text)
+            tw_set_string(text_widget, text)
 
         except Exception as e:
             # Display error message
-            disp_text_widget(text_widget, f"Error: {e}")
+            tw_set_string(text_widget, f"Error: {e}")
 
         finally:
             # Stop the progress bar
@@ -221,14 +213,6 @@ def main():
     label_font = font.Font(family="Helvetica", size=12)
     line_height = label_font.metrics("linespace")
     padding = line_height // 8
-
-    # Create label 1
-    label_1 = tk.Label(root, textvar=stringvar1, relief="solid", font=label_font)
-    label_1.pack(fill="x", expand=False, padx=10, pady=(padding, 0))
-
-    # Register drop event
-    label_1.register_drop_target("*")
-    label_1.bind("<<Drop>>", drop)
 
     # Create a progress bar
     progress_bar = ttk.Progressbar(root, mode='determinate')
@@ -246,8 +230,12 @@ def main():
     disp_font = font.Font(family="Meiryo UI", size=10)
     text_widget = tk.Text(frame, wrap="word", relief="solid", yscrollcommand=scrollbar.set, font=disp_font)
     text_widget.pack(fill="both", expand=True)
-    text_widget.insert(tk.END, 'Drop a PDF file to above box')
-    text_widget.config(state=tk.DISABLED)
+    # text_widget.insert(tk.END, 'Drop a PDF file here.')
+    # text_widget.config(state=tk.DISABLED)
+    tw_insert_string(txt_wdgt=text_widget, str="Drop a PDF here.")
+    # Bind drop event to text widget
+    text_widget.register_drop_target("*")
+    text_widget.bind("<<Drop>>", drop)
 
     # Configure the scrollbar
     scrollbar.config(command=text_widget.yview)
