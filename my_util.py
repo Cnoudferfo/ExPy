@@ -95,12 +95,30 @@ def testAttrTokens(attr_dic, page_strings):
                     break
         if VnInPage == '':
             for v in VendorNames:
-                ss = matchTokenAndTest(tokenStr=v, testStr=clean_str)
-                if(ss > 0.6) or (v in clean_str):
-                    VnInPage = v
-                    theHit = True
-                    msg_text += f" Hit! v={v}, ss={ss}"
+                sub_vn = v[2:5]
+                test_len = len(clean_str)
+                if sub_vn in clean_str:
+                    i = 0
+                    while i < (test_len - 1):
+                        sub_vn = v[:5]
+                        sub_test = clean_str[i:]
+                        i += 1
+                        ss = matchTokenAndTest(tokenStr=sub_vn, testStr=sub_test)
+                        # print(f"token={sub_vn}, test={sub_test}, ss={ss}")
+                        if(ss > 0.2) or (v in clean_str):
+                            VnInPage = v
+                            theHit = True
+                            msg_text += f" Hit! v={v}, ss={ss}"
+                            break
+                if theHit == True:
                     break
+                # ss = matchTokenAndTest(tokenStr=v, testStr=clean_str)
+                # print(f"token={v}, test={clean_str}, ss={ss}")
+                # if(ss > 0.6) or (v in clean_str):
+                #     VnInPage = v
+                #     theHit = True
+                #     msg_text += f" Hit! v={v}, ss={ss}"
+                #     break
         if QnInPage == '':
             for q in QuotationNumber:
                 if q in clean_str:
@@ -117,19 +135,12 @@ def testAttrTokens(attr_dic, page_strings):
         return {'title':TitleInPage, 'vendor name':VnInPage, 'quotation number':QnInPage}
 
 def main():
-
-    # testSpecs = [{'zoom': 1.2, 'cw': 0},
-    #              {'zoom': 1.2, 'cw': 90},
-    #              {'zoom': 1.8, 'cw': 0},
-    #              {'zoom': 1.8, 'cw': 90}]
-
-    # for testSpec in testSpecs:
-    #     print(f"zoom={testSpec['zoom']}, cw={testSpec['cw']}")
-
-    # exit(0)
-
     token = "估價單"
     test = "(估價單N0:240360)"
+
+    print(f"{test[2:4]}")
+    exit(0)
+
     if token in test:
         qn = ya_extract_qn(text=test, yy="24")
     print(f"qn = {qn}")
