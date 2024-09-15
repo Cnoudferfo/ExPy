@@ -83,6 +83,7 @@ def testAttrTokens(attr_dic, page_strings):
     theHit = False
     # To iterate every string in this page
     for str in page_strings:
+        theHit = False
         clean_str = remove_all_whitespaces(str)
         msg_text = f"Dbg:testAttrTokens() To test clean_str={clean_str}"
         if TitleInPage == '':
@@ -93,33 +94,37 @@ def testAttrTokens(attr_dic, page_strings):
                     theHit = True
                     msg_text += f" Hit! t={t}, ss={ss}"
                     break
-        if VnInPage == '':
+        if VnInPage == '' and theHit == False:
             for v in VendorNames:
-                sub_vn = v[2:5]
-                test_len = len(clean_str)
-                if sub_vn in clean_str:
-                    i = 0
-                    while i < (test_len - 1):
-                        sub_vn = v[:5]
-                        sub_test = clean_str[i:]
-                        i += 1
-                        ss = matchTokenAndTest(tokenStr=sub_vn, testStr=sub_test)
-                        # print(f"token={sub_vn}, test={sub_test}, ss={ss}")
-                        if(ss > 0.2) or (v in clean_str):
-                            VnInPage = v
-                            theHit = True
-                            msg_text += f" Hit! v={v}, ss={ss}"
-                            break
-                if theHit == True:
+                # To match the whole token with the whole test
+                ss = matchTokenAndTest(tokenStr=v, testStr=clean_str)
+                print(f"token={v}, test={clean_str}, ss={ss}")
+                if(ss > 0.9) or (v in clean_str):
+                    VnInPage = v
+                    theHit = True
+                    msg_text += f" Hit! v={v}, ss={ss}"
                     break
-                # ss = matchTokenAndTest(tokenStr=v, testStr=clean_str)
-                # print(f"token={v}, test={clean_str}, ss={ss}")
-                # if(ss > 0.6) or (v in clean_str):
-                #     VnInPage = v
-                #     theHit = True
-                #     msg_text += f" Hit! v={v}, ss={ss}"
-                #     break
-        if QnInPage == '':
+                else:
+                    # To match part of token and part of test
+                    sub_vn = v[2:5]
+                    print(f"sub_vn={sub_vn}, test={clean_str}")
+                    test_len = len(clean_str)
+                    if sub_vn in clean_str:
+                        i = 0
+                        while i < (test_len - 1):
+                            sub_vn = v[:5]
+                            sub_test = clean_str[i:]
+                            i += 1
+                            ss = matchTokenAndTest(tokenStr=sub_vn, testStr=sub_test)
+                            print(f"token={sub_vn}, test={sub_test}, ss={ss}")
+                            if(ss > 0.2) or (v in clean_str):
+                                VnInPage = v
+                                theHit = True
+                                msg_text += f" Hit! v={v}, ss={ss}"
+                                break
+                    if theHit == True:
+                        break
+        if QnInPage == '' and theHit == False:
             for q in QuotationNumber:
                 if q in clean_str:
                     QnInPage = ya_extract_qn(text = clean_str, yy = "24")
@@ -127,9 +132,9 @@ def testAttrTokens(attr_dic, page_strings):
                         theHit = True
                         msg_text += f" Hit! qn={QnInPage}"
                         break
-        # # To print debug message
-        # print(msg_text)
-    if theHit == False:
+        # To print debug message
+        print(msg_text)
+    if TitleInPage == '' and VnInPage == '' and QnInPage == '':
         return None
     else:
         return {'title':TitleInPage, 'vendor name':VnInPage, 'quotation number':QnInPage}
