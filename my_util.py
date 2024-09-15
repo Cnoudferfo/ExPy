@@ -96,9 +96,10 @@ def testAttrTokens(attr_dic, page_strings):
                     break
         if VnInPage == '' and theHit == False:
             for v in VendorNames:
+                clean_str.replace(":","").replace(" ", "")
                 # To match the whole token with the whole test
                 ss = matchTokenAndTest(tokenStr=v, testStr=clean_str)
-                print(f"token={v}, test={clean_str}, ss={ss}")
+                # print(f"token={v}, test={clean_str}, ss={ss}")
                 if(ss > 0.9) or (v in clean_str):
                     VnInPage = v
                     theHit = True
@@ -107,7 +108,6 @@ def testAttrTokens(attr_dic, page_strings):
                 else:
                     # To match part of token and part of test
                     sub_vn = v[2:5]
-                    print(f"sub_vn={sub_vn}, test={clean_str}")
                     test_len = len(clean_str)
                     if sub_vn in clean_str:
                         i = 0
@@ -116,8 +116,8 @@ def testAttrTokens(attr_dic, page_strings):
                             sub_test = clean_str[i:]
                             i += 1
                             ss = matchTokenAndTest(tokenStr=sub_vn, testStr=sub_test)
-                            print(f"token={sub_vn}, test={sub_test}, ss={ss}")
-                            if(ss > 0.2) or (v in clean_str):
+                            # print(f"token={sub_vn}, test={sub_test}, ss={ss}")
+                            if(ss > 0.45) or (v in clean_str):
                                 VnInPage = v
                                 theHit = True
                                 msg_text += f" Hit! v={v}, ss={ss}"
@@ -132,8 +132,8 @@ def testAttrTokens(attr_dic, page_strings):
                         theHit = True
                         msg_text += f" Hit! qn={QnInPage}"
                         break
-        # To print debug message
-        print(msg_text)
+        # # To print debug message
+        # print(msg_text)
     if TitleInPage == '' and VnInPage == '' and QnInPage == '':
         return None
     else:
