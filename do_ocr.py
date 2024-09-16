@@ -9,10 +9,12 @@ ocr_engine = None
 
 def use_tess():
     global ocr_engine
+    print("Use tesseract")
     import ocr_tesseract as ocr_engine  # Warning! Not comply with python convention
 
 def use_easyocr():
     global ocr_engine
+    print("Use EasyOCR")
     import ocr_easyocr as ocr_engine  # Warning! Not comply with python convention
 
 # Save the page
@@ -197,11 +199,14 @@ def saveMyOnePage(index=0,page=None):
     # return 0
 
 def doMyOnePage(index=0, page=None, attr_dic=None):
-    pp_strs, pp_cf = parse_a_page(page=page, zoom=2.0, cw=0)
+    pp_strs, pp_cf = parse_a_page(page=page, zoom=2.5, cw=0) # zoom 2.5 for testing tess
     print(f"pp_strs={pp_strs}")
     print(f"pp_cf={pp_cf}")
     page_dic = MyU.testTokensInOnePage(attr_dic=attr_dic, page_strings=pp_strs)
-    print(f"ti={page_dic['title']}, vn={page_dic['vendor name']}, qn={page_dic['quotation number']} ")
+    if page_dic != None:
+        print(f"ti={page_dic['title']}, vn={page_dic['vendor name']}, qn={page_dic['quotation number']} ")
+    else:
+        print("Page didn't hit!")
     return 0
 
 
@@ -218,11 +223,21 @@ def iterateInOnePdf(pdf=None, command=None):
 
 def main():
     global ocr_engine
+
+    if len(sys.argv) == 3 and sys.argv[2] == 'use_tess':
+        use_tess()
+    elif len(sys.argv) == 3 and sys.argv[2] == 'use_easy':
+        use_easyocr()
+    else:
+        print(f"Usage: python {os.path.basename(__file__)} pdf_filenpath ocr_option")
+        print(f"    ocr_option: [use_tess] tesseract, [use_easy] EasyOCR")
+        exit(-1)
+
     pdf = openPDF(fn=sys.argv[1])
     if pdf==None:
         exit(-1)
 
-    use_easyocr()
+
     ocr_engine.Init()
     iterateInOnePdf(pdf=pdf, command=doMyOnePage)
     return 0

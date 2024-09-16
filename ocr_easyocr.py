@@ -34,10 +34,10 @@ def preprocess_image(image):
 def ReadImage(image):
     global reader
     # Convert input image to numpy array
-    array_img = np.array(image)
+    np_img = np.array(image)
 
     # Preprocess the image
-    array_img = preprocess_image(array_img)
+    np_img = preprocess_image(np_img)
 
     # Rotation logic
     ## Initialize variables
@@ -46,7 +46,7 @@ def ReadImage(image):
     max_rotations = 3 # 0, 90, 180, 270
 
     while ave < 0.3 and rotation_count < max_rotations:
-        results = reader.readtext(array_img)
+        results = reader.readtext(np_img)
         # Calculate the average confidence level of this page
         conf_list = [cf for _, _, cf in results]
         ave = np.average(conf_list) if conf_list else 0
@@ -54,7 +54,7 @@ def ReadImage(image):
         if ave > 0.3:
             break
 
-        array_img = np.rot90(array_img)
+        np_img = np.rot90(np_img)
         rotation_count += 1
 
     # # TODO : REMOVE THIS BEFORE RELEASE
