@@ -38,22 +38,12 @@ def loadPageAttrFromJson():
 def remove_all_whitespaces(s):
     return re.sub(r'\s+', '', s)
 
-def matchTokenAndTest(tokenStr, testStr):
+def CalcStringSimilarity(tokenStr, testStr):
     # First test string_similarity
     max_len = max((len(tokenStr), len(testStr)))
     tokenNorm = tokenStr + ' '*(max_len - len(tokenStr))
     testNorm = testStr + ' '*(max_len - len(testStr))
     the_ss = sum(1 if i == j else 0 for i, j in zip(tokenNorm, testNorm)) / float(max_len)
-    # TODO : Overcome the string match logic
-    # TODO : Overcome the string match threashold value
-    # if the_ss > 0.6:
-    #     return the_ss
-    # # Next, test str in str
-    # elif tokenStr in testStr:
-    #     return 1.0
-    # else:
-    #     # Finally, return 0, No hit!
-    #     return 0.0
     return the_ss
 
 def extract_quotation_number(text, prefix):
@@ -73,7 +63,7 @@ def ya_extract_qn(text, yy):
         return ''
 
 # To test the occurences of all attribution tokens in this page
-def testAttrTokens(attr_dic, page_strings):
+def testTokensInOnePage(attr_dic, page_strings):
     Titles = attr_dic['titles']
     VendorNames = attr_dic['vendor names']
     QuotationNumber = attr_dic['quotation number']
@@ -83,12 +73,12 @@ def testAttrTokens(attr_dic, page_strings):
     theHit = False
     # To iterate every string in this page
     for str in page_strings:
-        theHit = False
         clean_str = remove_all_whitespaces(str)
+        clean_str.replace(":","")
         msg_text = f"Dbg:testAttrTokens() To test clean_str={clean_str}"
-        if TitleInPage == '':
+        if TitleInPage == '' and theHit == False:
             for t in Titles:
-                ss = matchTokenAndTest(tokenStr=t, testStr=clean_str)
+                ss = CalcStringSimilarity(tokenStr=t, testStr=clean_str)
                 if(ss > 0.6):
                     TitleInPage = t
                     theHit = True
@@ -96,17 +86,19 @@ def testAttrTokens(attr_dic, page_strings):
                     break
         if VnInPage == '' and theHit == False:
             for v in VendorNames:
-                clean_str.replace(":","").replace(" ", "")
-                # To match the whole token with the whole test
-                ss = matchTokenAndTest(tokenStr=v, testStr=clean_str)
-                # print(f"token={v}, test={clean_str}, ss={ss}")
+
+                # FIRST, do whole match
+                ss = CalcStringSimilarity(tokenStr=v, testStr=clean_str)
+                # print(f"token={v}, test={clean_str}, whole mtach ss={ss}")
+
+                # 0.9 high threashold to prevent false hit by similar vn
                 if(ss > 0.9) or (v in clean_str):
                     VnInPage = v
                     theHit = True
                     msg_text += f" Hit! v={v}, ss={ss}"
                     break
                 else:
-                    # To match part of token and part of test
+                    # SECOND, do iterative part match in case whole match failed
                     sub_vn = v[2:5]
                     test_len = len(clean_str)
                     if sub_vn in clean_str:
@@ -115,8 +107,10 @@ def testAttrTokens(attr_dic, page_strings):
                             sub_vn = v[:5]
                             sub_test = clean_str[i:]
                             i += 1
-                            ss = matchTokenAndTest(tokenStr=sub_vn, testStr=sub_test)
-                            # print(f"token={sub_vn}, test={sub_test}, ss={ss}")
+                            ss = CalcStringSimilarity(tokenStr=sub_vn, testStr=sub_test)
+                            # print(f"token={sub_vn}, test={sub_test}, part match ss={ss}")
+
+                            # 0.45 mid threshold to filter out similar non-vn strings
                             if(ss > 0.45) or (v in clean_str):
                                 VnInPage = v
                                 theHit = True
@@ -127,6 +121,7 @@ def testAttrTokens(attr_dic, page_strings):
         if QnInPage == '' and theHit == False:
             for q in QuotationNumber:
                 if q in clean_str:
+                    # TODO : WARNING! THE PREFIX "24" IS HARD CODING
                     QnInPage = ya_extract_qn(text = clean_str, yy = "24")
                     if QnInPage != None and QnInPage.isnumeric():
                         theHit = True
@@ -134,6 +129,9 @@ def testAttrTokens(attr_dic, page_strings):
                         break
         # # To print debug message
         # print(msg_text)
+
+        # Reset the Hit flag
+        theHit = False
     if TitleInPage == '' and VnInPage == '' and QnInPage == '':
         return None
     else:
@@ -181,7 +179,7 @@ def main():
     i=0
     for page in pages:
         i += 1
-        the_dic = testAttrTokens(attr_dic=a_dic, page_strings=page)
+        the_dic = testTokensInOnePage(attr_dic=a_dic, page_strings=page)
         if the_dic == None:
             print(f"page[{i}] No hit!")
         else:

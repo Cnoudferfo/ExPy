@@ -68,6 +68,7 @@ def ReadImage(image):
     text = ''
     for _, s, c in results:
         if c < 0.1:
+            # Skip the strings with confidence lower than 0.1
             continue
         text += f"{s}\n"
 

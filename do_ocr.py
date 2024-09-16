@@ -117,7 +117,7 @@ def Do_ocr(pdfFilePath='', pgCommand = None):
             print(f"drop(): page{i+1} parsed at zoom={zoomV}, cw={cwV}, strs_len={len(pp_strs)}, cf={pp_cf:.4f}")
             if pp_cf < 0.3:
                 continue
-            tested_dic = MyU.testAttrTokens(attr_dic=attr_dic_from_json, page_strings=pp_strs)
+            tested_dic = MyU.testTokensInOnePage(attr_dic=attr_dic_from_json, page_strings=pp_strs)
             if tested_dic != None:  # One of the age strings hit
                 t_qn = tested_dic['quotation number']
                 t_vn = tested_dic['vendor name']
@@ -196,14 +196,11 @@ def saveMyOnePage(index=0,page=None):
     return save_one_page(filename=fn, page=page)
     # return 0
 
-def iterateInOnePage(page_strings=None):
-    pass
-    return 0
 def doMyOnePage(index=0, page=None, attr_dic=None):
     pp_strs, pp_cf = parse_a_page(page=page, zoom=2.0, cw=0)
     print(f"pp_strs={pp_strs}")
     print(f"pp_cf={pp_cf}")
-    page_dic = MyU.testAttrTokens(attr_dic=attr_dic, page_strings=pp_strs)
+    page_dic = MyU.testTokensInOnePage(attr_dic=attr_dic, page_strings=pp_strs)
     print(f"ti={page_dic['title']}, vn={page_dic['vendor name']}, qn={page_dic['quotation number']} ")
     return 0
 
