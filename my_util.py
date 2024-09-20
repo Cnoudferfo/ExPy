@@ -35,6 +35,19 @@ def loadPageAttrFromJson():
         print(f"makeAttrDic() Error! {e}")
         return None
 
+def makeVocabulary(attr_dic=None):
+    if attr_dic==None:
+        return None
+    vocabList = []
+    for t in attr_dic['titles']:
+        vocabList.append(t)
+    for vn in attr_dic['vendor names']:
+        vocabList.append(vn)
+    for qn in attr_dic['quotation number']:
+        vocabList.append(qn)
+    return vocabList
+
+
 def remove_all_whitespaces(s):
     return re.sub(r'\s+', '', s)
 
@@ -138,6 +151,12 @@ def testTokensInOnePage(attr_dic, page_strings):
         return {'title':TitleInPage, 'vendor name':VnInPage, 'quotation number':QnInPage}
 
 def main():
+
+    twio="零壹貳參肆伍陸柒捌玖拾" # text whole in one
+    twio = twio[1:3] + twio[7:11]
+    print(f"twio={twio}")
+    exit(0)
+
     token = "估價單"
     test = "(估價單N0:240360)"
 

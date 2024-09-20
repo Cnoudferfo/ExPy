@@ -31,7 +31,7 @@ def preprocess_image(image):
     processed_img = np.array(sharpened)
     return processed_img
 
-def ReadImage(image):
+def ReadImage(image, vocabulary=None):
     global reader
     # Convert input image to numpy array
     np_img = np.array(image)

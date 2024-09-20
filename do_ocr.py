@@ -39,7 +39,7 @@ def ya_save_one_page(vendor_name, quo_number, title, page):
     return save_one_page(filename=fpath, page=page)
 
     # Parse a pdf page's text strings
-def parse_a_page(page, zoom=1.2, cw = 0):  # cw : counter-clockwise rotation in 0-90-270-degree
+def parse_a_page(page, zoom=1.2, cw = 0, attr_dic = None):  # cw : counter-clockwise rotation in 0-90-270-degree
     global ocr_engine
     if not isinstance(page, pmpdf.Page):
         raise ValueError("parse_a_page() must receive a PyMuPDF page object")
@@ -47,10 +47,13 @@ def parse_a_page(page, zoom=1.2, cw = 0):  # cw : counter-clockwise rotation in 
     mtrx = pmpdf.Matrix(zoom, zoom)  # To set a zoomed matrix
     page_pix = page.get_pixmap(matrix=mtrx)  # To get pixmap of page
     img = Image.frombytes("RGB", [page_pix.width, page_pix.height], page_pix.samples)  # Convert pixmap to image
-    page_str, page_cf = ocr_engine.ReadImage(img)
+
+    vocabulary = MyU.makeVocabulary(attr_dic=attr_dic)
+    page_str, page_cf = ocr_engine.ReadImage(image=img, vocabulary=vocabulary)
 
     return page_str.split('\n'), page_cf
 
+# An entry point of ocr processing
 def Do_ocr(pdfFilePath='', pgCommand = None):
     global ocr_engine
 
@@ -198,8 +201,9 @@ def saveMyOnePage(index=0,page=None):
     return save_one_page(filename=fn, page=page)
     # return 0
 
+# Yet, another entry point of ocr process
 def doMyOnePage(index=0, page=None, attr_dic=None):
-    pp_strs, pp_cf = parse_a_page(page=page, zoom=2.5, cw=0) # zoom 2.5 for testing tess
+    pp_strs, pp_cf = parse_a_page(page=page, zoom=2.0, cw=0, attr_dic=attr_dic) # Set only zoom factor, 2.0 should be the best
     print(f"pp_strs={pp_strs}")
     print(f"pp_cf={pp_cf}")
     page_dic = MyU.testTokensInOnePage(attr_dic=attr_dic, page_strings=pp_strs)
