@@ -43,7 +43,7 @@ def drop(event):  # On dnd's drop event
         dd_sender = dd_dict['寄件者']
         dd_subject = dd_dict['主旨']
         dd_locrxt = dd_dict['收到日期'].replace("下午", "PM").replace("上午", "AM")
-        
+
         loc_parse = datetime.strptime(dd_locrxt, "%Y/%m/%d %p %I:%M")
         dd_date = loc_parse.strftime("%Y-%m-%d")
         dd_time = loc_parse.strftime("%H:%M:%S")
@@ -90,6 +90,16 @@ def drop(event):  # On dnd's drop event
                     for attachment in msg.Attachments:
                         print(f"Found attachment: {attachment.FileName}")
                         file_path = os.path.join(save_path, attachment.FileName)
+
+                        # Check file existence
+                        base, ext = os.path.splitext(file_path)
+                        f_counter = 1
+                        while os.path.exists(file_path):
+                            p_str1 = f"{file_path} exists,"
+                            file_path =f"{base}_{f_counter}{ext}"
+                            print(f"{p_str1} try {file_path}")
+                            f_counter += 1
+
                         attachment.SaveAsFile(file_path)
                         saved_files.append(file_path)
                     stringvar.set(f"Attachments saved:\n" + "\n".join(saved_files))
