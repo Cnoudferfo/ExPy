@@ -46,18 +46,6 @@ def loadPageAttrFromJson():
     try:
         ocr_cfg = load_config('config_ocr.json')
         dic_config = parse_attributes(ocr_cfg)
-
-        # print("Attributes:")
-        # for t in dic_config['titles']:
-        #     print(f"{t}")
-        # for vn in dic_config['vendor names']:
-        #     print(f"{vn}")
-        # for qn in dic_config['quotation number']:
-        #     print(f"{qn}")
-
-        # Read transaction
-        # transactions = parse_transaction(ocr_cfg)
-        # TODO : return transaction
         return dic_config
     except Exception as e:
         print(f"loadPageAttrFromJson() Error! {e}")
@@ -177,6 +165,30 @@ def testTokensInOnePage(attr_dic, page_strings):
         return None
     else:
         return {'title':TitleInPage, 'vendor name':VnInPage, 'quotation number':QnInPage}
+
+def ya_testTokenInOnePage(token=None, pageText=None):
+    # Test each vocabulary to the textWholeInOne
+    hitStr =''
+    ss = 0
+    ppStr = pageText
+    ppLen = len(ppStr)
+    # Test in vocaStr exists in test whole in one
+    tokenLen = len(token)
+    pos_start = 0
+    while pos_start < ppLen:
+        testStr = ppStr[pos_start:(pos_start+tokenLen)]
+        ss = CalcStringSimilarity(tokenStr=token, testStr=testStr)
+        # print(f"token={token}, testStr={testStr}, ss={ss}")
+        # TODO : hard coding threashold
+        if ss > 0.65:
+            hitStr = token
+            sub1 = ppStr[0:pos_start]
+            sub2 = ppStr[(pos_start+tokenLen-1):ppLen]
+            ppStr = sub1 + sub2
+            ppLen = len(ppStr)
+            break
+        pos_start += 1
+    return hitStr, ss
 
 def main():
 

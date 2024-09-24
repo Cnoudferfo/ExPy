@@ -66,65 +66,35 @@ def ya_testInPage(strInPage, vocabulary):
             pos_start += 1
     return hitList
 
-def ReadImage(image, vocabulary=None):
+def ReadImage(image, vocabulary=None, ccw=0):
     # Convert input image to numpy array image
     np_img = np.array(image)
 
     # Preprocess the image
     processed_img = preprocess_image(np_img)
 
-    # Rotation logic
-    best_text = ""
-    best_ave = 0.0
-    best_rotation = 0
-    best_image = processed_img
-
-    # while ave < 90:
-    for rotation_count in range(4): # 0, 90, 180, 270 deggress ccw
-        data = ts.image_to_data(processed_img, lang='chi_tra', output_type=ts.Output.DICT)
-
-        # Extract text and confidence levels
-        results = [(data['left'][i], data['text'][i], int(data['conf'][i])) for i in range(len(data['text'])) if int(data['conf'][i]) > 0 and data['text'][i].strip()]
-        # Calculate the average confidence level of this page
-        conf_list = [conf for _, _, conf in results if _.strip()]
-        ave = np.average(conf_list) if conf_list else 0
-
-        print(f"Rotation={rotation_count}, ave={ave}")
-        # for i in range(len(data['text'])):
-        #     if data['text'][i].strip() and data['conf'][i]>-1:
-        #         print(f"{data['text'][i]} , {data['conf'][i]}")
-
-        # To make the OCR string of this page
-        txtNLSep = ''
-        txtInOne = ''
-        for _, s, c in results:
-            if c >= 0 and s.strip():
-                txtNLSep += f"{s}\n"
-                txtInOne += s
-
-        # Test each vocabulary to the textWholeInOne
-        hitList = ya_testInPage(strInPage=txtInOne, vocabulary=vocabulary)
-        print(f"hitList={hitList}")
-
-        # # Merge fragments based on the predefined vocabulary
-        # merged_text = merge_fragments(text, vocabulary)
-
-        if ave > best_ave:
-            best_text = txtNLSep
-            best_ave = ave
-            best_rotation = rotation_count
-            best_image = processed_img.copy()
-
-        # Rotate the page image
+    # Rotate to designated direction
+    ccw_count =0
+    while ccw_count < ccw:
         processed_img = np.rot90(processed_img)
+        ccw_count += 90
 
-    print(f"Best rotation={best_rotation}, best_ave={best_ave}")
-    pil_img = Image.fromarray(best_image)
-    pil_img.show()
+    data = ts.image_to_data(image=processed_img, lang='chi_tra', output_type=ts.Output.DICT)
+    # Extract text and confidence levels
+    results = [(data['left'][i], data['text'][i], int(data['conf'][i])) for i in range(len(data['text'])) if int(data['conf'][i]) > 0 and data['text'][i].strip()]
+    # Calculate the average confidence level of this page
+    conf_list = [conf for _, _, conf in results if _.strip()]
+    thisAveConf = np.average(conf_list) if conf_list else 0
 
+    # To make the OCR string of this page
+    thisText = ''
+    for _, s, c in results:
+        if c >= 0 and s.strip():
+            thisText += s
+    thisImg = processed_img.copy()
 
-    # return page string and average confidence level
-    return best_text, best_ave
+    return thisAveConf, thisText, thisImg
+
 
 def main():
     pageText = "SEC_ONE摩摩喳喳模具付款申請廠商確認書柒柒摳翔鎰精密科技工業有限公司啪啪啪噗噗估價單NO:240568娓娓到到到SEC_TWO元元始電子發飄證明聯結娓娓"

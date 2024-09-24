@@ -202,25 +202,127 @@ def saveMyOnePage(index=0,page=None):
     # return 0
 
 # Yet, another entry point of ocr process
-def doMyOnePage(index=0, page=None, attr_dic=None):
-    pp_strs, pp_cf = parse_a_page(page=page, zoom=2.0, cw=0, attr_dic=attr_dic) # Set only zoom factor, 2.0 should be the best
-    print(f"pp_strs={pp_strs}")
-    print(f"pp_cf={pp_cf}")
-    page_dic = MyU.testTokensInOnePage(attr_dic=attr_dic, page_strings=pp_strs)
-    if page_dic != None:
-        print(f"ti={page_dic['title']}, vn={page_dic['vendor name']}, qn={page_dic['quotation number']} ")
-    else:
-        print("Page didn't hit!")
-    return 0
+def doMyOnePage(page=None, attr_dic=None):
+    global ocr_engine
+    zoom = 2.0
+    result_dic = {
+        'title': '',
+        'vendor name': '',
+        'quotation number': 0,
+        'image': None
+    }
+    if not isinstance(page, pmpdf.Page):
+        raise ValueError("{__name__}, page NOT PDF!")
+    mtrx = pmpdf.Matrix(zoom, zoom)
+    pp_pix = page.get_pixmap(matrix=mtrx)
+    pp_img = Image.frombytes("RGB", [pp_pix.width, pp_pix.height], pp_pix.samples)
+    title_dic = {
+        'text': '',
+        'ss': 0
+    }
+    vn_dic = {
+        'text': '',
+        'ss': 0
+    }
+    qnInPage = ''
+    img_dic = {
+        'img': None,
+        'conf': 0
+    }
+    ccw_count = 0
+    while ccw_count <= 270:
+        # Do OCR
+        page_conf, page_text, page_img = ocr_engine.ReadImage(image=pp_img, ccw=ccw_count)
+        # Copy page image
+        if ccw_count == 0:
+            img_dic['conf'] = page_conf
+            img_dic['img'] = page_img.copy()
+        elif page_conf > img_dic['conf']:
+            img_dic['img'] = page_img.copy()
+        # PASS LOW CONFIDENCE ROTATION
+        if page_conf < 50:
+            ccw_count += 90
+            continue
+        # Loop in titles, vendor names, quotation number
+        for key in attr_dic.keys():
+           # Loop in all tokens
+           for token in attr_dic[key]:
+                # Test each vocabulary to the textWholeInOne
+                hit = False
+                ss = 0
+                ppStr = page_text
+                ppLen = len(ppStr)
+                # Test in vocaStr exists in test whole in one
+                tokenLen = len(token)
+                pos_start = 0
+                while pos_start < ppLen:
+                    testStr = ppStr[pos_start:(pos_start+tokenLen)]
+                    ss = MyU.CalcStringSimilarity(tokenStr=token, testStr=testStr)
+                    # TODO : hard coding threashold
+                    if ss > 0.65:
+                        hit = True
+                        # Cut and cascade page text
+                        sub1 = ppStr[0:pos_start]
+                        sub2 = ppStr[(pos_start+tokenLen-1):ppLen]
+                        ppStr = sub1 + sub2
+                        ppLen = len(ppStr)
+                        if token in attr_dic['titles']:
+                            if ss > title_dic['ss']:
+                                title_dic['ss'] = ss
+                                title_dic['text'] = token
+                        if token in attr_dic['vendor names']:
+                            if ss > vn_dic['ss']:
+                                vn_dic['ss'] = ss
+                                vn_dic['text'] = token
+                        if token in attr_dic['quotation number']:
+                            qnInPage = MyU.ya_extract_qn(text=ppStr, yy="24")
+                        break
+                    pos_start += 1
+                # if hit==True:
+                #     print(f"token={token} hit with ss={ss}")
 
+        # print(f"conf={page_conf}, text={page_text}")
+        ccw_count += 90
 
-def iterateInOnePdf(pdf=None):
+    print(f"title_dic={title_dic}, vn_dic={vn_dic}, qn={qnInPage}")
+    result_dic['title'] = title_dic['text']
+    result_dic['vendor name'] = vn_dic['text']
+    result_dic['quotation number'] = qnInPage
+    result_dic['image'] = img_dic['img'].copy()
+    return result_dic
+
+# To iterate in a pdf file
+#  Input : a pymupdf pdf object
+def iterateInPdf(pdf=None):
     if pdf==None:
         return None
+    # Load config_ocr.json
     attr_dic = MyU.loadPageAttrFromJson()
+    # Define a transaction
+    transaction = {
+        'quotation number': '',
+        'vendor name': '',
+        'titles to have': {
+            "模具付款申請廠商確認書": False,
+            "電子發票證明聯": False,
+            "統一發票": False,
+            "檢查結果連絡書": False,
+            "模具修繕申請表": False,
+            "金型修正指示書": False,
+            "設計變更連絡書": False,
+            "會議記錄": False,
+            "模具資產管理卡": False,
+            "模具重量照片": False
+        }
+    }
+    # Loop in all pages in pdf
     for i in range(pdf.page_count):
         page = pdf.load_page(i)
-        doMyOnePage(index=(i+1), page=page, attr_dic=attr_dic)
+        # To parse a page to title, vendor name, quotation number and get page image in pp_dic
+        pp_dic = doMyOnePage(page=page, attr_dic=attr_dic)
+        print(f"iterate page{i}, title={pp_dic['title']}, vn={pp_dic['vendor name']}, qn={pp_dic['quotation number']}")
+        pil_img = Image.fromarray(pp_dic['image'])
+        pil_img.show()
     return 0
 
 def main():
@@ -244,7 +346,7 @@ def main():
 
 
     ocr_engine.Init()
-    iterateInOnePdf(pdf=pdf)
+    iterateInPdf(pdf=pdf)
     return 0
 
 if __name__ == "__main__":

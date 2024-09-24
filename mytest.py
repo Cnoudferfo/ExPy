@@ -15,10 +15,22 @@ dic_trns = {
     '模具重量照片': []
 }
 
+def ReadImage(image=None, vocabulary=None, ccw=0):
+    ccw_count = 0
+    while ccw_count < ccw:
+        print("Rotate once")
+        ccw_count += 90
+    print(f"{__name__}, {ccw_count} times rotated")
+    return ccw_count
+
 def main():
     print("main() Hello world!")
     for key in dic_trns.keys():
         print(f"key={key}")
+    print(f"ReadImage={ReadImage(ccw=0)}")
+    print(f"ReadImage={ReadImage(ccw=90)}")
+    print(f"ReadImage={ReadImage(ccw=180)}")
+    print(f"ReadImage={ReadImage(ccw=270)}")
 
 if __name__ == "__main__":
     main()
