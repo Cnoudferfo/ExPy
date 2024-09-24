@@ -18,5 +18,16 @@
             "金原金屬有限公司"
         ],
         "quotation number": ["估價單"]
-    }
+    },
+    "a transaction": [
+        {
+            "vendor name": "",
+            "quotation number": "",
+            "papers to have": {
+                "TITLE ONE": false,
+                "TITLE TWO": false,
+                "TITLE THR": false
+            }
+        }
+    ]
 }
