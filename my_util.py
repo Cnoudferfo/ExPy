@@ -17,39 +17,46 @@ def parse_attributes(config):
     }
     return result
 
-def get_keys(data, parent_key=''):
-    keys = []
-    if isinstance(data, dict):
-        for k, v in data.items():
-            full_key = f"{parent_key}.{k}" if parent_key else k
-            keys.append(full_key)
-            if isinstance(v, dict) or isinstance(v, list):
-                keys.extend(get_keys(data=v, parent_key=full_key))
-    elif isinstance(data, list):
-        for i, item in enumerate(data):
-            full_key = f"{parent_key}[{i}]"
-            keys.extend(get_keys(data=item, parent_key=full_key))
-    return keys
+# def get_keys(data, parent_key=''):
+#     keys = []
+#     if isinstance(data, dict):
+#         for k, v in data.items():
+#             full_key = f"{parent_key}.{k}" if parent_key else k
+#             keys.append(full_key)
+#             if isinstance(v, dict) or isinstance(v, list):
+#                 keys.extend(get_keys(data=v, parent_key=full_key))
+#     elif isinstance(data, list):
+#         for i, item in enumerate(data):
+#             full_key = f"{parent_key}[{i}]"
+#             keys.extend(get_keys(data=item, parent_key=full_key))
+#     return keys
 
-def parse_transaction(config):
-    transactions = config.get('a transaction',{})
-    # for a_trans in transactions:
-    #         keys = a_trans.keys()
-    #         for key in keys:
-    #             print(f"key={key}")
-    all_keys = get_keys(transactions)
-    for key in all_keys:
-        print(key)
-    return transactions
+# def parse_transaction(config):
+#     transactions = config.get('a transaction',{})
+#     # for a_trans in transactions:
+#     #         keys = a_trans.keys()
+#     #         for key in keys:
+#     #             print(f"key={key}")
+#     all_keys = get_keys(transactions)
+#     for key in all_keys:
+#         print(key)
+#     return transactions
 
 def loadPageAttrFromJson():
     try:
         ocr_cfg = load_config('config_ocr.json')
         dic_config = parse_attributes(ocr_cfg)
 
-        # Read transaction
-        transactions = parse_transaction(ocr_cfg)
+        # print("Attributes:")
+        # for t in dic_config['titles']:
+        #     print(f"{t}")
+        # for vn in dic_config['vendor names']:
+        #     print(f"{vn}")
+        # for qn in dic_config['quotation number']:
+        #     print(f"{qn}")
 
+        # Read transaction
+        # transactions = parse_transaction(ocr_cfg)
         # TODO : return transaction
         return dic_config
     except Exception as e:

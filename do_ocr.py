@@ -214,15 +214,13 @@ def doMyOnePage(index=0, page=None, attr_dic=None):
     return 0
 
 
-def iterateInOnePdf(pdf=None, command=None):
+def iterateInOnePdf(pdf=None):
     if pdf==None:
         return None
     attr_dic = MyU.loadPageAttrFromJson()
     for i in range(pdf.page_count):
         page = pdf.load_page(i)
-        if command==None:
-            return None
-        command(index=(i+1), page=page, attr_dic=attr_dic)
+        doMyOnePage(index=(i+1), page=page, attr_dic=attr_dic)
     return 0
 
 def main():
@@ -231,11 +229,14 @@ def main():
     if len(sys.argv) == 3 and sys.argv[2] == 'use_tess':
         use_tess()
     elif len(sys.argv) == 3 and sys.argv[2] == 'use_easy':
-        use_easyocr()
-    else:
-        print(f"Usage: python {os.path.basename(__file__)} pdf_filenpath ocr_option")
-        print(f"    ocr_option: [use_tess] tesseract, [use_easy] EasyOCR")
+        # use_easyocr()
+        print("ABORTED! DON'T SUPPORT EasyOCR temporarily!")
         exit(-1)
+    else:
+        # print(f"Usage: python {os.path.basename(__file__)} pdf_filenpath ocr_option")
+        # print(f"    ocr_option: [use_tess] tesseract, [use_easy] EasyOCR")
+        # exit(-1)
+        use_tess()
 
     pdf = openPDF(fn=sys.argv[1])
     if pdf==None:
@@ -243,7 +244,7 @@ def main():
 
 
     ocr_engine.Init()
-    iterateInOnePdf(pdf=pdf, command=doMyOnePage)
+    iterateInOnePdf(pdf=pdf)
     return 0
 
 if __name__ == "__main__":
