@@ -16,7 +16,7 @@ def parse_attributes(config):
         'quotation number' : attr.get('quotation number',[])
     }
     return result
-
+## Get nested keys by recursively calling
 # def get_keys(data, parent_key=''):
 #     keys = []
 #     if isinstance(data, dict):
@@ -191,6 +191,14 @@ def ya_testTokenInOnePage(token=None, pageText=None):
     return hitStr, ss
 
 def main():
+
+    ya_config = load_config(fpth='ya_config_ocr.json')
+    ya_attr = ya_config.get('Attributes')
+    for key in ya_attr:
+        for item in ya_attr[key]:
+            for s_key in item.keys():
+                print(f"s_key={s_key}")
+    exit(0)
 
     the_dic =loadPageAttrFromJson()
     exit(0)

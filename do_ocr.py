@@ -300,8 +300,8 @@ def iterateInPdf(pdf=None):
     attr_dic = MyU.loadPageAttrFromJson()
     # Define a transaction
     transaction = {
-        'quotation number': '',
-        'vendor name': '',
+        'quotation number': 'null',
+        'vendor name': 'null',
         'titles to have': {
             "模具付款申請廠商確認書": False,
             "電子發票證明聯": False,
@@ -315,14 +315,44 @@ def iterateInPdf(pdf=None):
             "模具重量照片": False
         }
     }
+
+    def process_transaction(page_data):
+        # transaction process
+        if page_data['vendor name'] and page_data['quotation number']:
+            # New transaction
+            #    When quotation number changed, a new transaction came in
+            if transaction['quotation number'] != page_data['quotation number']:
+                transaction['vendor name'] = page_data['vendor name']
+                transaction['quotation number'] =page_data['quotation number']
+                for key in transaction['titles to have']:
+                    transaction['titles to have'][key] = False
+        if not page_data['quotation number']:
+            page_data['quotation number'] = transaction['quotation number']
+        if page_data['title']:
+            if page_data['title'] in transaction['titles to have'].keys():
+                transaction['titles to have'][page_data['title']] = True
+
+        if page_data['title'] == '' and page_data['vendor name'] == '' and page_data['quotation number'] == '':
+            if transaction['titles to have']['會議記錄'] == False:
+                page_data['title'] = '會議記錄'
+                transaction['titles to have']['會議記錄'] == True
+            else:
+                page_data['title'] = '模具重量照片'
+                transaction['titles to have']['模具重量照片'] == True
+
+        return f"{page_data['quotation number']}_{page_data['vendor name']}_{page_data['title']}.pdf"
+
     # Loop in all pages in pdf
     for i in range(pdf.page_count):
         page = pdf.load_page(i)
         # To parse a page to title, vendor name, quotation number and get page image in pp_dic
         pp_dic = doMyOnePage(page=page, attr_dic=attr_dic)
-        print(f"iterate page{i}, title={pp_dic['title']}, vn={pp_dic['vendor name']}, qn={pp_dic['quotation number']}")
-        pil_img = Image.fromarray(pp_dic['image'])
-        pil_img.show()
+
+        filepath = process_transaction(page_data=pp_dic)
+        print(f"filepath={filepath}")
+        # print(f"iterate page{i}, title={pp_dic['title']}, vn={pp_dic['vendor name']}, qn={pp_dic['quotation number']}")
+        # pil_img = Image.fromarray(pp_dic['image'])
+        # pil_img.show()
     return 0
 
 def main():
