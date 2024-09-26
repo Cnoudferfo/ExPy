@@ -202,8 +202,12 @@ def saveMyOnePage(index=0,page=None):
     # return 0
 
 # Yet, another entry point of ocr process
-def doMyOnePage(page=None, attr_dic=None):
+def doMyOnePage(page=None, attr_dic=None, page_no=0):
     global ocr_engine
+
+    if not isinstance(page, pmpdf.Page):
+        raise ValueError("{__name__}, page NOT PDF!")
+
     zoomAtPdf = 2.5
     result_dic = {
         'title': '',
@@ -212,8 +216,7 @@ def doMyOnePage(page=None, attr_dic=None):
         'image': None,
         'page conf': 0
     }
-    if not isinstance(page, pmpdf.Page):
-        raise ValueError("{__name__}, page NOT PDF!")
+
     mtrx = pmpdf.Matrix(zoomAtPdf, zoomAtPdf)
     pp_pix = page.get_pixmap(matrix=mtrx)
     pp_img = Image.frombytes("RGB", [pp_pix.width, pp_pix.height], pp_pix.samples)
@@ -230,12 +233,27 @@ def doMyOnePage(page=None, attr_dic=None):
         'img': None,
         'conf': 0
     }
-    zoomList = [1.0, 0.6]
+    # Define escape titles to try to speed up
+    EscapeTitles = [
+        "電子發票證明聯",
+        "統一發票",
+        "檢查結果連絡書",
+        "模具修繕申請表",
+        "金型修正指示書",
+        "設計變更連絡書",
+        "模具資產管理卡"
+    ]
+    # To try with multiple zooming
+    zoomList = [0.4, 0.6, 1.0]    # Do zoom-out first to try to speed up
     for zoomAtCv2 in zoomList:
         ccw_degree = 0
         while ccw_degree <= 270:
             # Do OCR
             page_conf, page_text, page_img = ocr_engine.ReadImage(image=pp_img, ccw=ccw_degree, zoom=zoomAtCv2)
+
+            # DEBUG
+            print(f"DEBUG : page{page_no},zoom={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
+
             # Copy page image
             if ccw_degree == 0:
                 img_dic['conf'] = page_conf
@@ -255,8 +273,8 @@ def doMyOnePage(page=None, attr_dic=None):
             # Loop in titles, vendor names, quotation number
             for key in attr_dic.keys():
                 # For calculating hit scale
-                theScale_for_title = 1
-                theHitCnt_for_title = 0
+                theScale = 1
+                theHitCnt = 0
                 lenOfTokens = len(attr_dic[key])
                 # Loop in all tokens
                 for token in attr_dic[key]:
@@ -277,9 +295,9 @@ def doMyOnePage(page=None, attr_dic=None):
                             # TODO : hard coding threashold
                             if ss > 0.65:
                                 if token in attr_dic['titles']:
-                                    theScale_for_title = toCalcHitScale(theLen=lenOfTokens, hitCount=theHitCnt_for_title, theExp=3)
-                                    theHitCnt_for_title += 1
-                                    ss = ss * theScale_for_title
+                                    theScale = toCalcHitScale(theLen=lenOfTokens, hitCount=theHitCnt, theExp=3)
+                                    theHitCnt += 1
+                                    ss = ss * theScale
                                     if ss > title_dic['ss']:
                                         title_dic['ss'] = ss
                                         title_dic['text'] = token
@@ -292,8 +310,12 @@ def doMyOnePage(page=None, attr_dic=None):
                             else:
                                 ss = MyU.CalcStringSimilarity(tokenStr=token, testStr=testStr)
                             if(ss > 0.9):
-                                vn_dic['ss'] = ss
-                                vn_dic['text'] = token
+                                theScale == toCalcHitScale(theLen=lenOfTokens, hitCount=theHitCnt, theExp=3)
+                                theHitCnt += 1
+                                ss = ss * theScale
+                                if ss > vn_dic['ss']:
+                                    vn_dic['ss'] = ss
+                                    vn_dic['text'] = token
                                 hit = True
                             else:
                                 sub_vn = token[2:5]
@@ -307,9 +329,13 @@ def doMyOnePage(page=None, attr_dic=None):
                                         ss = MyU.CalcStringSimilarity(tokenStr=sub_vn, testStr=sub_test)
 
                                         # 0.45 mid threshold to filter out similar non-vn strings
-                                        if(ss > 0.45) or (token in testStr):
-                                            vn_dic['ss'] = ss
-                                            vn_dic['text'] = token
+                                        if(ss > 0.45):
+                                            theScale = toCalcHitScale(theLen=lenOfTokens, hitCount=theHitCnt, theExp=3)
+                                            theHitCnt += 1
+                                            ss = ss * theScale
+                                            if ss > vn_dic['ss']:
+                                                vn_dic['ss'] = ss
+                                                vn_dic['text'] = token
                                             hit = True
                                             break
 
@@ -326,18 +352,17 @@ def doMyOnePage(page=None, attr_dic=None):
                             ppLen = len(ppStr)
                             # Break the while loop, go for next token
                             break
-
                         # Increment start position index
                         pos_start += 1
-                    # if hit==True:
-                    #     print(f"token={token} hit with ss={ss}")
-            # print(f"DEBUG : zoom={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
+            # To escape rotation trial
+            # if title_dic['text'] and title_dic['text'] in EscapeTitles:
+            #     break
             # Increment ccw degree
             ccw_degree += 90
+        # To escape zoom trial
+        if title_dic['text'] and title_dic['text'] in EscapeTitles:
+            break
 
-        # print(f"DEBUG : conf={page_conf}, text={page_text}")
-
-    # print(f"\t conf={img_dic['conf']} title={title_dic}, vn={vn_dic}, qn={qnInPage}")
     result_dic['title'] = title_dic['text']
     result_dic['vendor name'] = vn_dic['text']
     result_dic['quotation number'] = qnInPage
@@ -410,12 +435,12 @@ def iterateInPdf(pdf=None):
     for i in range(pdf.page_count):
         page = pdf.load_page(i)
 
-        print(f"Do page {i+1}.")
+        debug_msg = f"Do page {i+1} "
         # To parse a page to title, vendor name, quotation number and get page image in pp_dic
-        pp_dic = doMyOnePage(page=page, attr_dic=attr_dic)
+        pp_dic = doMyOnePage(page=page, attr_dic=attr_dic, page_no=(i+1))
 
         filepath = process_transaction(page_data=pp_dic)
-        print(f"\t filepath={filepath}")
+        print(f"{debug_msg}filepath={filepath}")
         # print(f"DEBUG : iterate page{i}, title={pp_dic['title']}, vn={pp_dic['vendor name']}, qn={pp_dic['quotation number']}")
         # # DEBUG : Show image
         # pil_img = Image.fromarray(pp_dic['image'])
