@@ -4,13 +4,21 @@ import numpy as np
 import cv2
 
 def Init():
-    ts.pytesseract.tesseract_cmd = r'D:\Tools\tesseract540\tesseract.exe'
+    ts.pytesseract.tesseract_cmd = r'D:\\Tools\\tesseract540\\tesseract.exe'
 
-def preprocess_image(image):
+def preprocess_image(image, zoom=1.0):
     # Convert to grayscale
     gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+
+    # Zoom
+    height, width = gray.shape[:2]
+    new_height = int(height * zoom)
+    new_width = int(width * zoom)
+    zoomed = cv2.resize(gray, (new_width, new_height), interpolation=cv2.INTER_NEAREST_EXACT)
+
     # Sharpen
-    pil_img = Image.fromarray(gray)
+    # pil_img = Image.fromarray(gray)
+    pil_img = Image.fromarray(zoomed)
     enhancer = ImageEnhance.Sharpness(pil_img)
     sharpened = enhancer.enhance(2.0)
     # Convert back to numpy array
@@ -66,12 +74,12 @@ def ya_testInPage(strInPage, vocabulary):
             pos_start += 1
     return hitList
 
-def ReadImage(image, vocabulary=None, ccw=0):
+def ReadImage(image, vocabulary=None, ccw=0, zoom=1.0):
     # Convert input image to numpy array image
     np_img = np.array(image)
 
     # Preprocess the image
-    processed_img = preprocess_image(np_img)
+    processed_img = preprocess_image(np_img, zoom=zoom)
 
     # Rotate to designated direction
     ccw_count =0

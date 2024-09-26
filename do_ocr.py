@@ -204,16 +204,17 @@ def saveMyOnePage(index=0,page=None):
 # Yet, another entry point of ocr process
 def doMyOnePage(page=None, attr_dic=None):
     global ocr_engine
-    zoom = 2.0
+    zoomAtPdf = 2.5
     result_dic = {
         'title': '',
         'vendor name': '',
         'quotation number': 0,
-        'image': None
+        'image': None,
+        'page conf': 0
     }
     if not isinstance(page, pmpdf.Page):
         raise ValueError("{__name__}, page NOT PDF!")
-    mtrx = pmpdf.Matrix(zoom, zoom)
+    mtrx = pmpdf.Matrix(zoomAtPdf, zoomAtPdf)
     pp_pix = page.get_pixmap(matrix=mtrx)
     pp_img = Image.frombytes("RGB", [pp_pix.width, pp_pix.height], pp_pix.samples)
     title_dic = {
@@ -229,66 +230,119 @@ def doMyOnePage(page=None, attr_dic=None):
         'img': None,
         'conf': 0
     }
-    ccw_count = 0
-    while ccw_count <= 270:
-        # Do OCR
-        page_conf, page_text, page_img = ocr_engine.ReadImage(image=pp_img, ccw=ccw_count)
-        # Copy page image
-        if ccw_count == 0:
-            img_dic['conf'] = page_conf
-            img_dic['img'] = page_img.copy()
-        elif page_conf > img_dic['conf']:
-            img_dic['img'] = page_img.copy()
-        # PASS LOW CONFIDENCE ROTATION
-        if page_conf < 50:
-            ccw_count += 90
-            continue
-        # Loop in titles, vendor names, quotation number
-        for key in attr_dic.keys():
-           # Loop in all tokens
-           for token in attr_dic[key]:
-                # Test each vocabulary to the textWholeInOne
-                hit = False
-                ss = 0
-                ppStr = page_text
-                ppLen = len(ppStr)
-                # Test in vocaStr exists in test whole in one
-                tokenLen = len(token)
-                pos_start = 0
-                while pos_start < ppLen:
-                    testStr = ppStr[pos_start:(pos_start+tokenLen)]
-                    ss = MyU.CalcStringSimilarity(tokenStr=token, testStr=testStr)
-                    # TODO : hard coding threashold
-                    if ss > 0.65:
-                        hit = True
-                        # Cut and cascade page text
-                        sub1 = ppStr[0:pos_start]
-                        sub2 = ppStr[(pos_start+tokenLen-1):ppLen]
-                        ppStr = sub1 + sub2
-                        ppLen = len(ppStr)
-                        if token in attr_dic['titles']:
-                            if ss > title_dic['ss']:
-                                title_dic['ss'] = ss
-                                title_dic['text'] = token
-                        if token in attr_dic['vendor names']:
-                            if ss > vn_dic['ss']:
+    zoomList = [1.0, 0.6]
+    for zoomAtCv2 in zoomList:
+        ccw_degree = 0
+        while ccw_degree <= 270:
+            # Do OCR
+            page_conf, page_text, page_img = ocr_engine.ReadImage(image=pp_img, ccw=ccw_degree, zoom=zoomAtCv2)
+            # Copy page image
+            if ccw_degree == 0:
+                img_dic['conf'] = page_conf
+                img_dic['img'] = page_img.copy()
+            elif page_conf > img_dic['conf']:
+                img_dic['img'] = page_img.copy()
+            # PASS LOW CONFIDENCE ROTATION
+            if page_conf < 50:
+                ccw_degree += 90
+                continue
+            # Calculate hit scale, the later the hit happened, the less the hit weight
+            def toCalcHitScale(theLen=10, hitCount=0, theExp=3):
+                ret = 1.0
+                if theLen > 0:
+                    ret = ((theLen - hitCount) / theLen)**theExp
+                return ret
+            # Loop in titles, vendor names, quotation number
+            for key in attr_dic.keys():
+                # For calculating hit scale
+                theScale_for_title = 1
+                theHitCnt_for_title = 0
+                lenOfTokens = len(attr_dic[key])
+                # Loop in all tokens
+                for token in attr_dic[key]:
+                    # Test each vocabulary to the textWholeInOne
+                    hit = False
+                    ss = 0
+                    ppStr = page_text
+                    ppLen = len(ppStr)
+                    tokenLen = len(token)
+                    pos_start = 0
+                    # To go through the page string
+                    while pos_start < ppLen:
+                        # Get a clean string according to token length
+                        testStr = ppStr[pos_start:(pos_start+tokenLen)]
+
+                        if key == 'titles' or key == 'quotation number':
+                            ss = MyU.CalcStringSimilarity(tokenStr=token, testStr=testStr)
+                            # TODO : hard coding threashold
+                            if ss > 0.65:
+                                if token in attr_dic['titles']:
+                                    theScale_for_title = toCalcHitScale(theLen=lenOfTokens, hitCount=theHitCnt_for_title, theExp=3)
+                                    theHitCnt_for_title += 1
+                                    ss = ss * theScale_for_title
+                                    if ss > title_dic['ss']:
+                                        title_dic['ss'] = ss
+                                        title_dic['text'] = token
+                                if token in attr_dic['quotation number']:
+                                    qnInPage = MyU.ya_extract_qn(text=ppStr, yy="24")
+                                hit = True
+                        elif key == 'vendor names':
+                            if token in testStr:
+                                ss = 1.0
+                            else:
+                                ss = MyU.CalcStringSimilarity(tokenStr=token, testStr=testStr)
+                            if(ss > 0.9):
                                 vn_dic['ss'] = ss
                                 vn_dic['text'] = token
-                        if token in attr_dic['quotation number']:
-                            qnInPage = MyU.ya_extract_qn(text=ppStr, yy="24")
-                        break
-                    pos_start += 1
-                # if hit==True:
-                #     print(f"token={token} hit with ss={ss}")
+                                hit = True
+                            else:
+                                sub_vn = token[2:5]
+                                test_len = len(testStr)
+                                if sub_vn in testStr:
+                                    i = 0
+                                    while i < (test_len - 1):
+                                        sub_vn = token[:5]
+                                        sub_test = testStr[i:]
+                                        i += 1
+                                        ss = MyU.CalcStringSimilarity(tokenStr=sub_vn, testStr=sub_test)
 
-        # print(f"conf={page_conf}, text={page_text}")
-        ccw_count += 90
+                                        # 0.45 mid threshold to filter out similar non-vn strings
+                                        if(ss > 0.45) or (token in testStr):
+                                            vn_dic['ss'] = ss
+                                            vn_dic['text'] = token
+                                            hit = True
+                                            break
 
-    print(f"title_dic={title_dic}, vn_dic={vn_dic}, qn={qnInPage}")
+                        # DEBUG
+                        # if key == 'vendor names' and "翔鎰" in token and ss > 0:
+                        #     print(f"\tDebug, ccw={ccw_degree}, token={token}, ss={ss}, testStr={testStr}")
+
+                        # A token hit!
+                        if hit == True:
+                            # Cut and cascade page text
+                            sub1 = ppStr[0:pos_start]
+                            sub2 = ppStr[(pos_start+tokenLen-1):ppLen]
+                            ppStr = sub1 + sub2
+                            ppLen = len(ppStr)
+                            # Break the while loop, go for next token
+                            break
+
+                        # Increment start position index
+                        pos_start += 1
+                    # if hit==True:
+                    #     print(f"token={token} hit with ss={ss}")
+            # print(f"DEBUG : zoom={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
+            # Increment ccw degree
+            ccw_degree += 90
+
+        # print(f"DEBUG : conf={page_conf}, text={page_text}")
+
+    # print(f"\t conf={img_dic['conf']} title={title_dic}, vn={vn_dic}, qn={qnInPage}")
     result_dic['title'] = title_dic['text']
     result_dic['vendor name'] = vn_dic['text']
     result_dic['quotation number'] = qnInPage
     result_dic['image'] = img_dic['img'].copy()
+    result_dic['page conf'] = img_dic['conf']
     return result_dic
 
 # To iterate in a pdf file
@@ -317,40 +371,53 @@ def iterateInPdf(pdf=None):
     }
 
     def process_transaction(page_data):
-        # transaction process
-        if page_data['vendor name'] and page_data['quotation number']:
-            # New transaction
-            #    When quotation number changed, a new transaction came in
-            if transaction['quotation number'] != page_data['quotation number']:
-                transaction['vendor name'] = page_data['vendor name']
-                transaction['quotation number'] =page_data['quotation number']
-                for key in transaction['titles to have']:
-                    transaction['titles to have'][key] = False
-        if not page_data['quotation number']:
-            page_data['quotation number'] = transaction['quotation number']
-        if page_data['title']:
-            if page_data['title'] in transaction['titles to have'].keys():
-                transaction['titles to have'][page_data['title']] = True
-
-        if page_data['title'] == '' and page_data['vendor name'] == '' and page_data['quotation number'] == '':
+        # An un-ocrable page came in
+        if page_data['page conf'] < 10:
+        # if page_data['title'] == '' and page_data['vendor name'] == '' and page_data['quotation number'] == '':
             if transaction['titles to have']['會議記錄'] == False:
                 page_data['title'] = '會議記錄'
                 transaction['titles to have']['會議記錄'] == True
             else:
                 page_data['title'] = '模具重量照片'
                 transaction['titles to have']['模具重量照片'] == True
+            page_data['vendor name'] = transaction['vendor name']
+            page_data['quotation number'] = transaction['quotation number']
+        else:
+            # This page is ocrable
+            if page_data['vendor name'] and page_data['quotation number']:
+                # New transaction
+                #    When quotation number changed, a new transaction came in
+                if transaction['quotation number'] != page_data['quotation number']:
+                    transaction['vendor name'] = page_data['vendor name']
+                    transaction['quotation number'] =page_data['quotation number']
+                    # Reset titles' appearances
+                    for key in transaction['titles to have']:
+                        transaction['titles to have'][key] = False
+            # WARNING! FILL IN VALUES IN CASE OF UN-OCRABLE VALUES HAPPENED
+            if not page_data['vendor name']:
+                page_data['vendor name'] = transaction['vendor name']
+            if not page_data['quotation number']:
+                page_data['quotation number'] = transaction['quotation number']
+            # Register title appearance
+            if page_data['title']:
+                if page_data['title'] in transaction['titles to have'].keys():
+                    transaction['titles to have'][page_data['title']] = True
+
 
         return f"{page_data['quotation number']}_{page_data['vendor name']}_{page_data['title']}.pdf"
 
     # Loop in all pages in pdf
     for i in range(pdf.page_count):
         page = pdf.load_page(i)
+
+        print(f"Do page {i+1}.")
         # To parse a page to title, vendor name, quotation number and get page image in pp_dic
         pp_dic = doMyOnePage(page=page, attr_dic=attr_dic)
 
         filepath = process_transaction(page_data=pp_dic)
-        print(f"filepath={filepath}")
-        # print(f"iterate page{i}, title={pp_dic['title']}, vn={pp_dic['vendor name']}, qn={pp_dic['quotation number']}")
+        print(f"\t filepath={filepath}")
+        # print(f"DEBUG : iterate page{i}, title={pp_dic['title']}, vn={pp_dic['vendor name']}, qn={pp_dic['quotation number']}")
+        # # DEBUG : Show image
         # pil_img = Image.fromarray(pp_dic['image'])
         # pil_img.show()
     return 0

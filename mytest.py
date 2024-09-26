@@ -28,6 +28,8 @@ def test_transaction_process():
         ]
     }
 
+    print(f"Len of vendors={len(db['vendors'])}")
+
     test_pattern = []
     trans_count = 0
     page_count = 0
