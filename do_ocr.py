@@ -180,9 +180,6 @@ def Do_ocr(pdfFilePath='', pgCommand = None):
         pgCommand(text = text)
 
 def openPDF(fn=''):
-    if not os.path.isfile(fn) or 'pdf' not in fn:
-        print(f"Wrong! {fn} is NOT a pdf file!")
-        return None
     pdf = pmpdf.open(filename=fn)
     print(f"openPDF() open : {fn}.")
     return pdf
@@ -252,7 +249,7 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
             page_conf, page_text, page_img = ocr_engine.ReadImage(image=pp_img, ccw=ccw_degree, zoom=zoomAtCv2)
 
             # DEBUG
-            # print(f"DEBUG : page{page_no},zoom={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
+            print(f"DEBUG : page{page_no},zoom={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
 
             # Copy page image
             if ccw_degree == 0:
@@ -295,19 +292,31 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
                             # TODO : hard coding threashold
                             if ss > 0.65:
                                 if token in attr_dic['titles']:
-                                    theScale = toCalcHitScale(theLen=lenOfTokens, hitCount=theHitCnt, theExp=3)
-                                    theHitCnt += 1
-                                    ss = ss * theScale
-                                    if ss > title_dic['ss']:
+                                    # # DEBUG
+                                    # if '統一' in token or '模具' in token:
+                                    #     print(f"\tDebug, ccw={ccw_degree}, token={token}, ss={ss}, testStr={testStr}")
+                                    # Title order logic
+                                    if '模具付款申請' in token and '統一' in title_dic['text']:
                                         title_dic['ss'] = ss
                                         title_dic['text'] = token
+                                    else:
+                                        theScale = toCalcHitScale(theLen=lenOfTokens, hitCount=theHitCnt, theExp=3)
+                                        theHitCnt += 1
+                                        ss = ss * theScale
+                                        if ss > title_dic['ss']:
+                                            title_dic['ss'] = ss
+                                            title_dic['text'] = token
                                 if token in attr_dic['quotation number']:
                                     qnInPage = MyU.ya_extract_qn(text=ppStr, yy="24")
                                 hit = True
                         elif key == 'vendor names':
-                            if token in testStr:
-                                ss = 1.0
-                            else:
+                            shrink_tail = len(token)
+                            while shrink_tail > 3:
+                                if token[:shrink_tail] in testStr:
+                                    ss = 1.0
+                                    break
+                                shrink_tail -= 1
+                            if ss < 1.0:
                                 ss = MyU.CalcStringSimilarity(tokenStr=token, testStr=testStr)
                             if(ss > 0.9):
                                 theScale == toCalcHitScale(theLen=lenOfTokens, hitCount=theHitCnt, theExp=3)
@@ -328,8 +337,8 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
                                         i += 1
                                         ss = MyU.CalcStringSimilarity(tokenStr=sub_vn, testStr=sub_test)
 
-                                        # 0.45 mid threshold to filter out similar non-vn strings
-                                        if(ss > 0.45):
+                                        # TODO : HARD CODING THRESHOLD
+                                        if(ss > 0.68):
                                             theScale = toCalcHitScale(theLen=lenOfTokens, hitCount=theHitCnt, theExp=3)
                                             theHitCnt += 1
                                             ss = ss * theScale
@@ -339,8 +348,8 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
                                             hit = True
                                             break
 
-                        # DEBUG
-                        # if key == 'vendor names' and "翔鎰" in token and ss > 0:
+                        # # DEBUG
+                        # if key == 'vendor names' and ("精銘" in token or "翔鎰" in token) and ss > 0:
                         #     print(f"\tDebug, ccw={ccw_degree}, token={token}, ss={ss}, testStr={testStr}")
 
                         # A token hit!
@@ -449,31 +458,42 @@ def iterateInPdf(pdf=None):
 
 def main():
     global ocr_engine
-    plain_ocr = False
-
     if len(sys.argv) < 3:
-        print(f"Usage: python {__name__} pdf_filenpath ocr_option")
-        print(f"    ocr_option: [use_tess] tesseract, [use_easy] EasyOCR")
+        path_strs = __file__.split('\\')
+        exename = path_strs[len(path_strs)-1]
+        print(f"Usage: python {exename} Filepath Option")
+        print(f"\tFilepath : pdf file")
+        print(f"\tOption :")
+        print(f"\t\tuse_tess : to do mold transaction ocr using tesseract")
+        print(f"\t\tuse_easy : to do mold transaction ocr using EasyOCR")
+        print(f"\t\tplain_ocr : to do plain ocr using tesseract")
+        print(f"\t\tjustocr page_numer... : just do mold transaction ocr to the designated page(s) to 1-page file(s), page_number count from 1, using tess.")
         exit(-1)
-
-    if sys.argv[2] == 'use_easy':
-        # use_easyocr()
-        print("ABORTED! DON'T SUPPORT EasyOCR temporarily!")
+    fn = sys.argv[1]
+    if not os.path.isfile(fn) or 'pdf' not in fn:
+        print(f"Wrong! {fn} NOT exists or NOT a pdf file!")
         exit(-1)
-    else:
-        use_tess()
-
-    if sys.argv[2] == 'plain_ocr':
-        plain_ocr = True
-
-    pdf = openPDF(fn=sys.argv[1])
-    if pdf==None:
+    theDoc = openPDF(fn=fn)
+    if theDoc==None:
+        print(f"Failed in open {fn}!")
         exit(-1)
-
+    vectortable_ocr_usage = {
+        'use_tess': use_tess,
+        'use_easy': use_easyocr,
+        'plain_ocr': use_tess,
+        'justocr': use_tess
+    }
+    vectortable_ocr_usage[sys.argv[2]]()
     ocr_engine.Init()
-    if plain_ocr == True:
-        for i in range(pdf.page_count):
-            page = pdf.load_page(i)
+    if sys.argv[2] == 'use_tess':
+        iterateInPdf(pdf=theDoc)
+    elif sys.argv[2] == 'use_tess':
+        print(f"Temporarily DON'T support EasyOCR!")
+        theDoc.close()
+        exit(-1)
+    elif sys.argv[2] == 'plain_ocr':
+        for i in range(theDoc.page_count):
+            page = theDoc.load_page(i)
             zoom = 2.5
             mtrx = pmpdf.Matrix(zoom, zoom)
             pp_pix = page.get_pixmap(matrix=mtrx)
@@ -483,8 +503,24 @@ def main():
             print(f"page_text={page_text}")
             pil_img = Image.fromarray(page_img)
             pil_img.show()
+    elif sys.argv[2] == 'justocr':
+        designated_pages = sys.argv[3:len(sys.argv)]
+        for pp in designated_pages:
+            ppno = int(pp) - 1
+            attr_dic = MyU.loadPageAttrFromJson()
+            if ppno < theDoc.page_count:
+                page = theDoc.load_page(ppno)
+
+                # To parse a page to title, vendor name, quotation number and get page image in pp_dic
+                pp_dic = doMyOnePage(page=page, attr_dic=attr_dic, page_no=(ppno+1))
+
+                print(f"DEBUG : iterate page{ppno+1}, title={pp_dic['title']}, vn={pp_dic['vendor name']}, qn={pp_dic['quotation number']}")
+                # # DEBUG : Show image
+                # pil_img = Image.fromarray(pp_dic['image'])
+                # pil_img.show()
     else:
-        iterateInPdf(pdf=pdf)
+        pass
+    theDoc.close()
     return 0
 
 if __name__ == "__main__":

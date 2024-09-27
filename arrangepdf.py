@@ -1,3 +1,4 @@
+# To re-arrange a lot of mold transaction pages
 import os
 import sys
 import pymupdf as fitz
@@ -214,7 +215,10 @@ def main():
     for item in arrange_table:
         ori_ppno = item['original_page_no']-1
         rot = item['to_rotate']
+        if rot == 270:
+            rot = 90
         ori_page = doc.load_page(ori_ppno)
+        ori_page.set_rotation(rotation=rot)
 
         if rot == 0:
             new_width = ori_page.rect.width
@@ -222,14 +226,22 @@ def main():
         else:
             new_width = ori_page.rect.height
             new_height = ori_page.rect.width
-
-        new_page = new_doc.new_page(width=new_width, height=new_height)
-        new_page.show_pdf_page(new_page.rect, doc, pno=ori_ppno, rotate=rot, keep_proportion=True)
+        if new_height > new_width:
+            aspec = new_height / new_width
+        else:
+            aspec = new_width / new_height
+        # # Use fitz new_page() and show_pdf_page() methods
+        # new_page = new_doc.new_page(width=new_width, height=new_height)
+        # new_page.show_pdf_page(new_page.rect, doc, pno=ori_ppno, rotate=rot, keep_proportion=True)
+        # Use fitz insert_pdf() method
+        new_doc.insert_pdf(ori_page.parent, from_page=ori_page.number, to_page=ori_page.number)
         i += 1
-        print(f"page{i} ori_pp={item['original_page_no']}, rot={rot}")
+        print(f"page{i} ori_pp={item['original_page_no']}, rot={rot} w x h={new_width} x {new_height}, aspec={aspec}")
 
     # Save the new PDF
     new_doc.save(".\\test_data\\rearranged.pdf")
+    new_doc.close()
+    doc.close()
 
 if __name__ == "__main__":
     main()
