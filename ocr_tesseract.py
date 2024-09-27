@@ -16,6 +16,8 @@ def preprocess_image(image, zoom=1.0):
     new_width = int(width * zoom)
     zoomed = cv2.resize(gray, (new_width, new_height), interpolation=cv2.INTER_NEAREST_EXACT)
 
+    # # Thresholding (Binarization)
+    # preproc = cv2.adaptiveThreshold(zoomed, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
     # Sharpen
     # pil_img = Image.fromarray(gray)
     pil_img = Image.fromarray(zoomed)
@@ -24,6 +26,7 @@ def preprocess_image(image, zoom=1.0):
     # Convert back to numpy array
     processed_img = np.array(sharpened)
     return processed_img
+
 
 def merge_fragments(text_fragments, vocabulary):
     merged_text = ""

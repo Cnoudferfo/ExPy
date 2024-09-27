@@ -252,7 +252,7 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
             page_conf, page_text, page_img = ocr_engine.ReadImage(image=pp_img, ccw=ccw_degree, zoom=zoomAtCv2)
 
             # DEBUG
-            print(f"DEBUG : page{page_no},zoom={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
+            # print(f"DEBUG : page{page_no},zoom={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
 
             # Copy page image
             if ccw_degree == 0:
@@ -449,26 +449,42 @@ def iterateInPdf(pdf=None):
 
 def main():
     global ocr_engine
+    plain_ocr = False
 
-    if len(sys.argv) == 3 and sys.argv[2] == 'use_tess':
-        use_tess()
-    elif len(sys.argv) == 3 and sys.argv[2] == 'use_easy':
+    if len(sys.argv) < 3:
+        print(f"Usage: python {__name__} pdf_filenpath ocr_option")
+        print(f"    ocr_option: [use_tess] tesseract, [use_easy] EasyOCR")
+        exit(-1)
+
+    if sys.argv[2] == 'use_easy':
         # use_easyocr()
         print("ABORTED! DON'T SUPPORT EasyOCR temporarily!")
         exit(-1)
     else:
-        # print(f"Usage: python {os.path.basename(__file__)} pdf_filenpath ocr_option")
-        # print(f"    ocr_option: [use_tess] tesseract, [use_easy] EasyOCR")
-        # exit(-1)
         use_tess()
+
+    if sys.argv[2] == 'plain_ocr':
+        plain_ocr = True
 
     pdf = openPDF(fn=sys.argv[1])
     if pdf==None:
         exit(-1)
 
-
     ocr_engine.Init()
-    iterateInPdf(pdf=pdf)
+    if plain_ocr == True:
+        for i in range(pdf.page_count):
+            page = pdf.load_page(i)
+            zoom = 2.5
+            mtrx = pmpdf.Matrix(zoom, zoom)
+            pp_pix = page.get_pixmap(matrix=mtrx)
+            pp_img = Image.frombytes("RGB", [pp_pix.width, pp_pix.height], pp_pix.samples)
+            page_conf, page_text, page_img = ocr_engine.ReadImage(image=pp_img, ccw=0, zoom=1.0)
+            print(f"page_conf={page_conf}")
+            print(f"page_text={page_text}")
+            pil_img = Image.fromarray(page_img)
+            pil_img.show()
+    else:
+        iterateInPdf(pdf=pdf)
     return 0
 
 if __name__ == "__main__":
