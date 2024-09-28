@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import my_util as MyU
 
 ocr_engine = None
+ocr_type = 'tess'
 
 def use_tess():
     global ocr_engine
@@ -14,8 +15,10 @@ def use_tess():
 
 def use_easyocr():
     global ocr_engine
+    global ocr_type
     print("Use EasyOCR")
     import ocr_easyocr as ocr_engine  # Warning! Not comply with python convention
+    ocr_type = 'easyocr'
 
 # Save the page
 def save_one_page(filename='', page=None):
@@ -235,6 +238,7 @@ def testAndCut(tok='', ppStr=''):
 # Yet, another entry point of ocr process
 def doMyOnePage(page=None, attr_dic=None, page_no=0):
     global ocr_engine
+    global ocr_type
     # Check page
     if not isinstance(page, pmpdf.Page):
         raise ValueError("{__name__}, page NOT PDF!")
@@ -248,8 +252,7 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
     result_dic = {
         'title': '',
         'vendor name': '',
-        'quotation number': 0,
-        'image': None,
+        'quotation number': '',
         'page conf': 0
     }
     # Yet another result
@@ -259,10 +262,6 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
         'quotation number': {'text': '', 'ss': 0.0}
     }
     qnInPage = ''
-    img_dic = {
-        'img': None,
-        'conf': 0
-    }
     # Define escape titles to try to speed up
     EscapeTitles = [
         "電子發票證明聯",
@@ -273,27 +272,35 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
         "設計變更連絡書",
         "模具資產管理卡"
     ]
-    # To try with multiple zooming
-    zoomList = [0.4, 0.6, 1.0]    # Do zoom-out first to try to speed up
-    for zoomAtCv2 in zoomList:
-        ccw_degree = 0
-        while ccw_degree <= 270:
-            # Do OCR
-            page_conf, page_text, page_img = ocr_engine.ReadImage(image=pp_img, ccw=ccw_degree, zoom=zoomAtCv2)
 
-            # Copy page image
-            if ccw_degree == 0:
-                img_dic['conf'] = page_conf
-                img_dic['img'] = page_img.copy()
-            elif page_conf > img_dic['conf']:
-                img_dic['img'] = page_img.copy()
-            # PASS LOW CONFIDENCE ROTATION
-            if page_conf < 50:
-                ccw_degree += 90
+    if ocr_type=='tess':
+        minconf = 50
+        zoomList = [0.4, 0.6, 1.0]    # for Easy OCR
+        ccw_list = [0, 90, 180, 270]  # for Easy OCR
+    else:
+        minconf = 15
+        zoomList = [1.0]    # for Easy OCR
+        ccw_list = [90, 0]  # for Easy OCR
+
+    for zoomAtCv2 in zoomList:
+        # ccw_degree = 0
+        # while ccw_degree <= 270:
+        for ccw_degree in ccw_list:
+            # Do OCR
+            page_conf, str = ocr_engine.ReadImage(image=pp_img, ccw=ccw_degree, zoom=zoomAtCv2)
+            page_text = MyU.remove_punctuation(MyU.remove_all_whitespaces(s=str))
+            if ocr_type == 'easyocr':
+                page_conf *= 100
+            # Update page confidence value
+            if page_conf > result_dic['page conf']:
+                result_dic['page conf'] = page_conf
+
+            # SKIP LOW CONFIDENCE ROTATION
+            if page_conf < minconf:
                 continue
 
             # DEBUG
-            print(f"DEBUG : page{page_no},zoom={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
+            print(f"DEBUG : pp.{page_no},conf={page_conf},zm={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
 
             # Loop in titles, vendor names, quotation number
             for key in attr_dic.keys():
@@ -328,21 +335,15 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
                             if ss > ya_rst_dic[key]['ss']:
                                 ya_rst_dic[key]['ss'] = ss
                                 ya_rst_dic[key]['text'] = qnInPage
-            # Increment ccw degree
-            ccw_degree += 90
+            # To escape rotate trial
+            if ocr_type=='easyocr' and ya_rst_dic['title']['text'] in EscapeTitles:
+                break
         # To escape zoom trial
-        # if title_dic['text'] and title_dic['text'] in EscapeTitles:
-        if ya_rst_dic['title']['text'] in EscapeTitles:
+        if ocr_type=='tess' and ya_rst_dic['title']['text'] in EscapeTitles:
             break
-
-    # result_dic['title'] = title_dic['text']
-    # result_dic['vendor name'] = vn_dic['text']
-    # result_dic['quotation number'] = qnInPage
     result_dic['title'] = ya_rst_dic['title']['text']
     result_dic['vendor name'] = ya_rst_dic['vendor name']['text']
     result_dic['quotation number'] = ya_rst_dic['quotation number']['text']
-    result_dic['image'] = img_dic['img'].copy()
-    result_dic['page conf'] = img_dic['conf']
     return result_dic
 
 # To iterate in a pdf file
@@ -447,16 +448,17 @@ def main():
         'use_tess': use_tess,
         'use_easy': use_easyocr,
         'plain_ocr': use_tess,
-        'justocr': use_tess
+        'justocr': use_easyocr
     }
     vectortable_ocr_usage[sys.argv[2]]()
     ocr_engine.Init()
-    if sys.argv[2] == 'use_tess':
+    # if sys.argv[2] == 'use_tess':
+    if sys.argv[2] == 'use_tess' or sys.argv[2] == 'use_easy':
         iterateInPdf(pdf=theDoc)
-    elif sys.argv[2] == 'use_tess':
-        print(f"Temporarily DON'T support EasyOCR!")
-        theDoc.close()
-        exit(-1)
+    # elif sys.argv[2] == 'use_tess':
+    #     print(f"Temporarily DON'T support EasyOCR!")
+    #     theDoc.close()
+    #     exit(-1)
     elif sys.argv[2] == 'plain_ocr':
         for i in range(theDoc.page_count):
             page = theDoc.load_page(i)

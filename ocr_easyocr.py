@@ -15,66 +15,55 @@ def Init():
     print(f"Gpu = {Gpu}")
     reader = easyocr.Reader(['ch_tra', 'en'], gpu=Gpu)
 
-def preprocess_image(image):
+def preprocess_image(image, zoom=1.0):
     # Convert to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # # Apply Guassian blur to reduce noise
-    # blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    # # Binarization
-    # _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    # Sharpen
-    # pil_img = Image.fromarray(binary)
-    pil_img = Image.fromarray(gray)
+
+    # Zoom
+    height, width = gray.shape[:2]
+    new_height = int(height * zoom)
+    new_width = int(width * zoom)
+    zoomed = cv2.resize(gray, (new_width, new_height), interpolation=cv2.INTER_NEAREST_EXACT)
+
+    pil_img = Image.fromarray(zoomed)
     enhancer = ImageEnhance.Sharpness(pil_img)
     sharpened = enhancer.enhance(2.0)
     # Convert back to numpy array
     processed_img = np.array(sharpened)
     return processed_img
 
-def ReadImage(image, vocabulary=None):
+def ReadImage(image, vocabulary=None, ccw=0, zoom=1.0):
     global reader
     # Convert input image to numpy array
     np_img = np.array(image)
 
     # Preprocess the image
-    np_img = preprocess_image(np_img)
+    processed_img = preprocess_image(image=np_img, zoom=zoom)
 
-    # Rotation logic
-    ## Initialize variables
-    ave = 0
-    rotation_count = 0
-    max_rotations = 3 # 0, 90, 180, 270
+    # Rotate to designated direction
+    ccw_count =0
+    while ccw_count < ccw:
+        processed_img = np.rot90(processed_img)
+        ccw_count += 90
 
-    while ave < 0.3 and rotation_count < max_rotations:
-        results = reader.readtext(np_img)
-        # Calculate the average confidence level of this page
-        conf_list = [cf for _, _, cf in results]
-        ave = np.average(conf_list) if conf_list else 0
+    results = reader.readtext(image=processed_img)
+    # Calculate the average confidence level of this page
+    conf_list = [cf for _, _, cf in results if _.strip()]
+    ave = np.average(conf_list) if conf_list else 0
 
-        if ave > 0.3:
-            break
-
-        np_img = np.rot90(np_img)
-        rotation_count += 1
-
-    # # TODO : REMOVE THIS BEFORE RELEASE
-    # # To show the image for confirmation
-    # pil_img = Image.fromarray(array_img)
-    # pil_img.show()
+    # TODO : REMOVE THIS BEFORE RELEASE
+    # To show the image for confirmation
+    pil_img = Image.fromarray(processed_img)
+    pil_img.show()
 
     # To make the OCR string of this page
-    # text = '\n'.join([s for _, s, _ in results])
-    # text = '\n'.join([s if c > 0.1 else '\n' for _, s, c in results])
     text = ''
     for _, s, c in results:
-        if c < 0.1:
-            # Skip the strings with confidence lower than 0.1
-            continue
-        text += f"{s}\n"
+        if c > 0.1:
+            text += s
 
     # return page string and average confidence level
-    return text, ave
-
+    return ave, text
 
 def main():
     Init()

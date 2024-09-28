@@ -16,34 +16,12 @@ def preprocess_image(image, zoom=1.0):
     new_width = int(width * zoom)
     zoomed = cv2.resize(gray, (new_width, new_height), interpolation=cv2.INTER_NEAREST_EXACT)
 
-    # # Thresholding (Binarization)
-    # preproc = cv2.adaptiveThreshold(zoomed, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
-    # Sharpen
-    # pil_img = Image.fromarray(gray)
     pil_img = Image.fromarray(zoomed)
     enhancer = ImageEnhance.Sharpness(pil_img)
     sharpened = enhancer.enhance(2.0)
     # Convert back to numpy array
     processed_img = np.array(sharpened)
     return processed_img
-
-
-def merge_fragments(text_fragments, vocabulary):
-    merged_text = ""
-    buffer = ""
-    for fragment in text_fragments:
-        buffer += fragment
-        if buffer in vocabulary:
-            merged_text += buffer + "\n"
-            buffer = ""
-        elif any(word.startswith(buffer) for word in vocabulary):
-            continue
-        else:
-            merged_text += buffer + "\n"
-            buffer = ""
-    if buffer:
-        merged_text += buffer + "\n"
-    return merged_text
 
 def calcStringSimilarity(tokenStr, testStr):
     # First test string_similarity
@@ -102,9 +80,8 @@ def ReadImage(image, vocabulary=None, ccw=0, zoom=1.0):
     for _, s, c in results:
         if c >= 0 and s.strip():
             thisText += s
-    thisImg = processed_img.copy()
 
-    return thisAveConf, thisText, thisImg
+    return thisAveConf, thisText
 
 
 def main():

@@ -67,6 +67,13 @@ def makeVocabulary(attr_dic=None):
 def remove_all_whitespaces(s):
     return re.sub(r'\s+', '', s)
 
+def remove_punctuation(text):
+    # Define the pattern to match all punctuation marks
+    pattern = r'[^\w\s]'
+    # Substitute all punctuation marks with an empty string
+    cleaned_text = re.sub(pattern, '', text)
+    return cleaned_text
+
 def CalcStringSimilarity(tokenStr, testStr):
     # First test string_similarity
     max_len = max((len(tokenStr), len(testStr)))
