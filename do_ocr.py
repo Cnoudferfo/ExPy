@@ -198,14 +198,53 @@ def saveMyOnePage(index=0,page=None):
     return save_one_page(filename=fn, page=page)
     # return 0
 
+def testTokenInPage(tok='', ppStr=''):
+    ss = 0
+    pageLen = len(ppStr)
+    tokenLen = len(tok)
+    pos_start = 0
+    if tokenLen > 8:
+        threshold = 1 - (2 / tokenLen) # Permit for 2 unmatach word
+    elif tokenLen > 3:
+        threshold = 1 - (1 / tokenLen) # Permit for 1 unmatach word
+    else:
+        threshold = 1 - (0 / tokenLen) # Permit for 0 unmatach word
+    while pos_start < pageLen:
+        # Get a clean string according to token length
+        testStr = ppStr[pos_start:(pos_start+tokenLen)]
+        ss = MyU.CalcStringSimilarity(tokenStr=tok, testStr=testStr)
+        if ss >= threshold:
+            return ss, pos_start
+        # Increment start position index
+        pos_start += 1
+    return 0, 0
+
+def cutPage(ppStr='', pos_start=0, cutLen=0):
+    # Cut and cascade page text
+    sub1 = ppStr[0:pos_start]
+    sub2 = ppStr[(pos_start+cutLen):len(ppStr)]
+    ppStr = sub1 + sub2
+    return ppStr
+
+def testAndCut(tok='', ppStr=''):
+    ss, pos_start = testTokenInPage(tok=tok, ppStr=ppStr)
+    if ss:
+        ppStr = cutPage(ppStr=ppStr, pos_start=pos_start, cutLen=len(tok))
+    return ppStr, ss
+
 # Yet, another entry point of ocr process
 def doMyOnePage(page=None, attr_dic=None, page_no=0):
     global ocr_engine
-
+    # Check page
     if not isinstance(page, pmpdf.Page):
         raise ValueError("{__name__}, page NOT PDF!")
-
+    # SET ZOOM FACTOR
     zoomAtPdf = 2.5
+    # Get page image
+    mtrx = pmpdf.Matrix(zoomAtPdf, zoomAtPdf)
+    pp_pix = page.get_pixmap(matrix=mtrx)
+    pp_img = Image.frombytes("RGB", [pp_pix.width, pp_pix.height], pp_pix.samples)
+    # Result
     result_dic = {
         'title': '',
         'vendor name': '',
@@ -213,17 +252,11 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
         'image': None,
         'page conf': 0
     }
-
-    mtrx = pmpdf.Matrix(zoomAtPdf, zoomAtPdf)
-    pp_pix = page.get_pixmap(matrix=mtrx)
-    pp_img = Image.frombytes("RGB", [pp_pix.width, pp_pix.height], pp_pix.samples)
-    title_dic = {
-        'text': '',
-        'ss': 0
-    }
-    vn_dic = {
-        'text': '',
-        'ss': 0
+    # Yet another result
+    ya_rst_dic = {
+        'title': {'text': '', 'ss': 0.0},
+        'vendor name': {'text': '', 'ss': 0.0},
+        'quotation number': {'text': '', 'ss': 0.0}
     }
     qnInPage = ''
     img_dic = {
@@ -248,9 +281,6 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
             # Do OCR
             page_conf, page_text, page_img = ocr_engine.ReadImage(image=pp_img, ccw=ccw_degree, zoom=zoomAtCv2)
 
-            # DEBUG
-            print(f"DEBUG : page{page_no},zoom={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
-
             # Copy page image
             if ccw_degree == 0:
                 img_dic['conf'] = page_conf
@@ -261,120 +291,56 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
             if page_conf < 50:
                 ccw_degree += 90
                 continue
-            # Calculate hit scale, the later the hit happened, the less the hit weight
-            def toCalcHitScale(theLen=10, hitCount=0, theExp=3):
-                ret = 1.0
-                if theLen > 0:
-                    ret = ((theLen - hitCount) / theLen)**theExp
-                return ret
+
+            # DEBUG
+            print(f"DEBUG : page{page_no},zoom={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
+
             # Loop in titles, vendor names, quotation number
             for key in attr_dic.keys():
-                # For calculating hit scale
-                theScale = 1
-                theHitCnt = 0
-                lenOfTokens = len(attr_dic[key])
+
                 # Loop in all tokens
                 for token in attr_dic[key]:
-                    # Test each vocabulary to the textWholeInOne
-                    hit = False
-                    ss = 0
-                    ppStr = page_text
-                    ppLen = len(ppStr)
-                    tokenLen = len(token)
-                    pos_start = 0
-                    # To go through the page string
-                    while pos_start < ppLen:
-                        # Get a clean string according to token length
-                        testStr = ppStr[pos_start:(pos_start+tokenLen)]
-
-                        if key == 'titles' or key == 'quotation number':
-                            ss = MyU.CalcStringSimilarity(tokenStr=token, testStr=testStr)
-                            # TODO : hard coding threashold
-                            if ss > 0.65:
-                                if token in attr_dic['titles']:
-                                    # # DEBUG
-                                    # if '統一' in token or '模具' in token:
-                                    #     print(f"\tDebug, ccw={ccw_degree}, token={token}, ss={ss}, testStr={testStr}")
-                                    # Title order logic
-                                    if '模具付款申請' in token and '統一' in title_dic['text']:
-                                        title_dic['ss'] = ss
-                                        title_dic['text'] = token
-                                    else:
-                                        theScale = toCalcHitScale(theLen=lenOfTokens, hitCount=theHitCnt, theExp=3)
-                                        theHitCnt += 1
-                                        ss = ss * theScale
-                                        if ss > title_dic['ss']:
-                                            title_dic['ss'] = ss
-                                            title_dic['text'] = token
-                                if token in attr_dic['quotation number']:
-                                    qnInPage = MyU.ya_extract_qn(text=ppStr, yy="24")
-                                hit = True
-                        elif key == 'vendor names':
-                            shrink_tail = len(token)
-                            while shrink_tail > 3:
-                                if token[:shrink_tail] in testStr:
-                                    ss = 1.0
-                                    break
-                                shrink_tail -= 1
-                            if ss < 1.0:
-                                ss = MyU.CalcStringSimilarity(tokenStr=token, testStr=testStr)
-                            if(ss > 0.9):
-                                theScale == toCalcHitScale(theLen=lenOfTokens, hitCount=theHitCnt, theExp=3)
-                                theHitCnt += 1
-                                ss = ss * theScale
-                                if ss > vn_dic['ss']:
-                                    vn_dic['ss'] = ss
-                                    vn_dic['text'] = token
-                                hit = True
-                            else:
-                                sub_vn = token[2:5]
-                                test_len = len(testStr)
-                                if sub_vn in testStr:
-                                    i = 0
-                                    while i < (test_len - 1):
-                                        sub_vn = token[:5]
-                                        sub_test = testStr[i:]
-                                        i += 1
-                                        ss = MyU.CalcStringSimilarity(tokenStr=sub_vn, testStr=sub_test)
-
-                                        # TODO : HARD CODING THRESHOLD
-                                        if(ss > 0.68):
-                                            theScale = toCalcHitScale(theLen=lenOfTokens, hitCount=theHitCnt, theExp=3)
-                                            theHitCnt += 1
-                                            ss = ss * theScale
-                                            if ss > vn_dic['ss']:
-                                                vn_dic['ss'] = ss
-                                                vn_dic['text'] = token
-                                            hit = True
-                                            break
-
-                        # # DEBUG
-                        # if key == 'vendor names' and ("精銘" in token or "翔鎰" in token) and ss > 0:
-                        #     print(f"\tDebug, ccw={ccw_degree}, token={token}, ss={ss}, testStr={testStr}")
-
-                        # A token hit!
-                        if hit == True:
-                            # Cut and cascade page text
-                            sub1 = ppStr[0:pos_start]
-                            sub2 = ppStr[(pos_start+tokenLen-1):ppLen]
-                            ppStr = sub1 + sub2
-                            ppLen = len(ppStr)
-                            # Break the while loop, go for next token
-                            break
-                        # Increment start position index
-                        pos_start += 1
-            # To escape rotation trial
-            # if title_dic['text'] and title_dic['text'] in EscapeTitles:
-            #     break
+                    if key == 'titles' or key == 'vendor names':
+                        # Test each vocabulary to the textWholeInOne
+                        ss, pos_st = testTokenInPage(tok=token, ppStr=page_text)
+                        # String similarity is large enough to cut the token from page string
+                        if ss > 0.9:
+                            page_text = cutPage(ppStr=page_text, pos_start=pos_st, cutLen=len(token))
+                        # HIT CONDITION
+                        #   TODO : hard coding threashold
+                        if ss > 0.65:
+                            # trim the 's' in key's tail
+                            key_singular = key[:(len(key)-1)]
+                            if ss > ya_rst_dic[key_singular]['ss']:
+                                ya_rst_dic[key_singular]['ss'] = ss
+                                # solution Title Order, sTO
+                                if ya_rst_dic[key_singular]['text']==attr_dic['titles'][0]:
+                                    pass
+                                else:
+                                    ya_rst_dic[key_singular]['text'] = token
+                    elif key == 'quotation number':
+                        ss, pos_s = testTokenInPage(tok=token, ppStr=page_text)
+                        if ss > 0.65:
+                            pos_e = pos_s+len(token)+10
+                            qnStr = page_text[pos_s:pos_e]
+                            qnInPage = MyU.ya_extract_qn(text=qnStr, yy="24")
+                            page_text = cutPage(ppStr=page_text, pos_start=pos_s, cutLen=(pos_e-pos_s+1))
+                            if ss > ya_rst_dic[key]['ss']:
+                                ya_rst_dic[key]['ss'] = ss
+                                ya_rst_dic[key]['text'] = qnInPage
             # Increment ccw degree
             ccw_degree += 90
         # To escape zoom trial
-        if title_dic['text'] and title_dic['text'] in EscapeTitles:
+        # if title_dic['text'] and title_dic['text'] in EscapeTitles:
+        if ya_rst_dic['title']['text'] in EscapeTitles:
             break
 
-    result_dic['title'] = title_dic['text']
-    result_dic['vendor name'] = vn_dic['text']
-    result_dic['quotation number'] = qnInPage
+    # result_dic['title'] = title_dic['text']
+    # result_dic['vendor name'] = vn_dic['text']
+    # result_dic['quotation number'] = qnInPage
+    result_dic['title'] = ya_rst_dic['title']['text']
+    result_dic['vendor name'] = ya_rst_dic['vendor name']['text']
+    result_dic['quotation number'] = ya_rst_dic['quotation number']['text']
     result_dic['image'] = img_dic['img'].copy()
     result_dic['page conf'] = img_dic['conf']
     return result_dic
