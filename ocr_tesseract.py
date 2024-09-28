@@ -1,7 +1,11 @@
+import os
+import sys
 import pytesseract as ts
 from PIL import Image, ImageEnhance
 import numpy as np
 import cv2
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import my_util as MyU
 
 def Init():
     ts.pytesseract.tesseract_cmd = r'D:\\Tools\\tesseract540\\tesseract.exe'
@@ -55,7 +59,7 @@ def ya_testInPage(strInPage, vocabulary):
             pos_start += 1
     return hitList
 
-def ReadImage(image, vocabulary=None, ccw=0, zoom=1.0):
+def ReadImage(image, ccw=0, zoom=1.0, do_plain=False):
     # Convert input image to numpy array image
     np_img = np.array(image)
 
@@ -71,9 +75,17 @@ def ReadImage(image, vocabulary=None, ccw=0, zoom=1.0):
     data = ts.image_to_data(image=processed_img, lang='chi_tra', output_type=ts.Output.DICT)
     # Extract text and confidence levels
     results = [(data['left'][i], data['text'][i], int(data['conf'][i])) for i in range(len(data['text'])) if int(data['conf'][i]) > 0 and data['text'][i].strip()]
+
+    if do_plain==True:
+        MyU.log_text(f"{results}")
+        return 0, ''
+
     # Calculate the average confidence level of this page
     conf_list = [conf for _, _, conf in results if _.strip()]
     thisAveConf = np.average(conf_list) if conf_list else 0
+
+    # To show the image for confirmation
+    MyU.log_img(processed_img)
 
     # To make the OCR string of this page
     thisText = ''

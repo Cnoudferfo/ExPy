@@ -1,8 +1,12 @@
+import os
+import sys
 import easyocr
 import numpy as np
 import torch
 from PIL import Image, ImageEnhance, ImageFilter
 import cv2
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import my_util as MyU
 
 reader = None
 
@@ -32,7 +36,7 @@ def preprocess_image(image, zoom=1.0):
     processed_img = np.array(sharpened)
     return processed_img
 
-def ReadImage(image, vocabulary=None, ccw=0, zoom=1.0):
+def ReadImage(image, ccw=0, zoom=1.0, do_plain=False):
     global reader
     # Convert input image to numpy array
     np_img = np.array(image)
@@ -47,14 +51,17 @@ def ReadImage(image, vocabulary=None, ccw=0, zoom=1.0):
         ccw_count += 90
 
     results = reader.readtext(image=processed_img)
+
+    if do_plain==True:
+        MyU.log_text(f"{results}")
+        return 0, ''
+
     # Calculate the average confidence level of this page
     conf_list = [cf for _, _, cf in results if _.strip()]
     ave = np.average(conf_list) if conf_list else 0
 
-    # TODO : REMOVE THIS BEFORE RELEASE
     # To show the image for confirmation
-    pil_img = Image.fromarray(processed_img)
-    pil_img.show()
+    MyU.log_img(processed_img)
 
     # To make the OCR string of this page
     text = ''

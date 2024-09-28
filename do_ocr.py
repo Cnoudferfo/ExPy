@@ -20,11 +20,17 @@ def use_easyocr():
     import ocr_easyocr as ocr_engine  # Warning! Not comply with python convention
     ocr_type = 'easyocr'
 
+# Get page image
+def getPageImg(page, zoom):
+    mtrx = pmpdf.Matrix(zoom, zoom)
+    pix = page.get_pixmap(matrix=mtrx)
+    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+    return img
+
 # Save the page
 def save_one_page(filename='', page=None):
     if filename == '' or page == None:
         return -1
-
     new_pdf = pmpdf.open()
     new_pdf.insert_pdf(page.parent, from_page=page.number, to_page=page.number)
     new_pdf.save(filename)
@@ -38,149 +44,7 @@ def ya_save_one_page(vendor_name, quo_number, title, page):
         fpath = f"./test_data/{quo_number}_{vendor_name}_{title}.pdf"
     else:
         fpath = f"./test_data/{quo_number}_{vendor_name}_會議記錄.pdf"
-
     return save_one_page(filename=fpath, page=page)
-
-    # Parse a pdf page's text strings
-def parse_a_page(page, zoom=1.2, cw = 0, attr_dic = None):  # cw : counter-clockwise rotation in 0-90-270-degree
-    global ocr_engine
-    if not isinstance(page, pmpdf.Page):
-        raise ValueError("parse_a_page() must receive a PyMuPDF page object")
-    page.set_rotation(cw)
-    mtrx = pmpdf.Matrix(zoom, zoom)  # To set a zoomed matrix
-    page_pix = page.get_pixmap(matrix=mtrx)  # To get pixmap of page
-    img = Image.frombytes("RGB", [page_pix.width, page_pix.height], page_pix.samples)  # Convert pixmap to image
-
-    vocabulary = MyU.makeVocabulary(attr_dic=attr_dic)
-    page_str, page_cf = ocr_engine.ReadImage(image=img, vocabulary=vocabulary)
-
-    return page_str.split('\n'), page_cf
-
-# An entry point of ocr processing
-def Do_ocr(pdfFilePath='', pgCommand = None):
-    global ocr_engine
-
-    if ocr_engine == None:
-        print(f"Do_ocr() Error: OCR object=None")
-        return -1
-
-    ocr_engine.Init()
-
-    # Load page attributions from json
-    attr_dic_from_json = MyU.loadPageAttrFromJson()
-    if attr_dic_from_json == None:
-        return -1
-
-    # Validate the PDF file
-    pdf = pmpdf.open(pdfFilePath)  # To open pdf file
-
-    if pgCommand != None:
-        pgCommand(maximum=pdf.page_count)
-
-    text = 'OCR result ' + '\n'
-    op_fpath = '' # One page (output) file name
-
-    # Define test specifications, zoom and cw rotation in degrees
-    # TODO : modify testSpecs according to the real pdf's page directions
-    testSpecs = [{'zoom': 2.5, 'cw': 0}, {'zoom': 2.5, 'cw': 90}, {'zoom': 2.5, 'cw': 180}, {'zoom': 2.5, 'cw': 270}]
-
-    # To prepare one page pdf's filepath
-    # reset leading quotation number & vendor name
-    lead_qn = ''
-    lead_vn = ''
-
-    def IS_PASS_THIS_SPEC(page_number, test_count):
-        # WARNING! THIS IS A HARD CODING LOGIC ACCORDING TO CERTAIN TEST PDF
-        if (page_number % 4) == 2 or (page_number % 4) == 3:
-            use_spec = 4 # testSpecs[1] = cw270
-        else:
-            use_spec = 1 # testSpecs[0] = cw0
-        # skip or not
-        if test_count != use_spec:
-            return True # SKIP
-        else:
-            return False # DON'T SKIP
-
-    # For each page in pdf
-    for i in range(pdf.page_count):  # Use PyMuPdf
-        # Perform OCR
-        pp = pdf.load_page(i)  # To load the i-th page
-
-        j = 0     # test count
-        for ts in testSpecs:   # To test a page in different specs if needed
-            j += 1
-
-            # # TODO : Remove this temp operation
-            # # Rotate the page according to test file's page placement
-            # if IS_PASS_THIS_SPEC(page_number=(i+1), test_count=j) == True:
-            #     continue
-
-            # Doubt about is multiple rotation damage the page image?
-            ppcopy = pp
-
-            zoomV = ts['zoom']
-            cwV = ts['cw']
-            # pp_strs = parse_a_page(page=pp, zoom=zoomV, cw=cwV)  # To parse this page to strings
-            pp_strs, pp_cf = parse_a_page(page=ppcopy, zoom=zoomV, cw=cwV)  # To parse this page to strings
-            print(f"drop(): page{i+1} parsed at zoom={zoomV}, cw={cwV}, strs_len={len(pp_strs)}, cf={pp_cf:.4f}")
-            if pp_cf < 0.3:
-                continue
-            tested_dic = MyU.testTokensInOnePage(attr_dic=attr_dic_from_json, page_strings=pp_strs)
-            if tested_dic != None:  # One of the age strings hit
-                t_qn = tested_dic['quotation number']
-                t_vn = tested_dic['vendor name']
-                t_ti = tested_dic['title']
-
-                # TODO : To refine attribution registration logic
-                if lead_qn=='' and lead_vn=='':
-                    if t_qn!='' and t_vn!='':
-                        lead_qn = t_qn
-                        lead_vn = t_vn
-                if lead_qn!='' and lead_vn!='':
-                    if t_qn!='' and t_vn!='':
-                        if t_qn != lead_qn:
-                            lead_qn = t_qn
-                            lead_vn = t_vn
-
-                # To prevent useless rotation
-                if t_ti != '':
-                    print(f"drop() page{i+1} hit! title={t_ti}, vendor name={t_vn}, quotation number={t_qn}")
-                    break
-                else:
-                    tested_dic = None
-
-        # TODO : Overcome NO HIT logic
-        # FOR NOW, LET "if tested_dic == None" BE THE NO HIT! CONDITION
-        # if j == len(testSpecs) and tested_dic == None: # No hit
-        if tested_dic == None:
-            if lead_qn != '' and lead_vn != '':
-                # To save one page file
-                op_fpath = f"./test_data/{lead_qn}_{lead_vn}_會議記錄.pdf"
-                # ret = save_one_page(filename = fpath, page = ppcopy)
-                # print(f"save_one_page({fpath},ppcopy) returned {ret}")
-
-            else:
-                print("FATAL ERROR! NO HIT PAGE WITHOUT LEADING QN or VN!")
-        else:
-            # TODO : Add transaction page disorder logic
-
-            # FOR NOW, TEST FILEIS WELL ORDERED!
-            if lead_qn != '' and lead_vn != '' and t_ti != '':
-                # To save the one page file
-                op_fpath = f"./test_data/{lead_qn}_{lead_vn}_{t_ti}.pdf"
-                # ret = save_one_page(filename = fpath, page = ppcopy)
-                # print(f"save_one_page({fpath},ppcopy) returned {ret}")
-            else:
-                print("FATAL ERROR! HIT PAGE WITHOUT LEADING QN or VN!")
-
-        text += f"Dbg: page{i+1} was parsed {j} times, file=\"{op_fpath}\"   will be saved.\n"
-
-        # To update progress bar
-        if pgCommand != None:
-            pgCommand(value = i+1)
-
-    if pgCommand != None:
-        pgCommand(text = text)
 
 def openPDF(fn=''):
     pdf = pmpdf.open(filename=fn)
@@ -189,17 +53,12 @@ def openPDF(fn=''):
 
 def saveMyOnePage(index=0,page=None):
     if (index % 4) == 2 or (index % 4) == 3:
-        # cw = 270
         cw = 90
     else:
         cw = 0
     page.set_rotation(cw)
-    print(f"index={index}, cw={cw}")
-
     fn = f".\\test_data\\page_{index}.pdf"
-    print(f"processPage() to save : {fn}.")
     return save_one_page(filename=fn, page=page)
-    # return 0
 
 def testTokenInPage(tok='', ppStr=''):
     ss = 0
@@ -245,9 +104,7 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
     # SET ZOOM FACTOR
     zoomAtPdf = 2.5
     # Get page image
-    mtrx = pmpdf.Matrix(zoomAtPdf, zoomAtPdf)
-    pp_pix = page.get_pixmap(matrix=mtrx)
-    pp_img = Image.frombytes("RGB", [pp_pix.width, pp_pix.height], pp_pix.samples)
+    pp_img = getPageImg(page=page, zoom=zoomAtPdf)
     # Result
     result_dic = {
         'title': '',
@@ -256,7 +113,7 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
         'page conf': 0
     }
     # Yet another result
-    ya_rst_dic = {
+    resultBuffer = {
         'title': {'text': '', 'ss': 0.0},
         'vendor name': {'text': '', 'ss': 0.0},
         'quotation number': {'text': '', 'ss': 0.0}
@@ -267,9 +124,11 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
         "電子發票證明聯",
         "統一發票",
         "檢查結果連絡書",
+        "檢查結果聯絡書",
         "模具修繕申請表",
         "金型修正指示書",
         "設計變更連絡書",
+        "設計變更聯絡書",
         "模具資產管理卡"
     ]
 
@@ -280,7 +139,7 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
     else:
         minconf = 15
         zoomList = [1.0]    # for Easy OCR
-        ccw_list = [90, 0]  # for Easy OCR
+        ccw_list = [90, 0, 270]  # for Easy OCR
 
     for zoomAtCv2 in zoomList:
         # ccw_degree = 0
@@ -291,20 +150,21 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
             page_text = MyU.remove_punctuation(MyU.remove_all_whitespaces(s=str))
             if ocr_type == 'easyocr':
                 page_conf *= 100
-            # Update page confidence value
-            if page_conf > result_dic['page conf']:
-                result_dic['page conf'] = page_conf
+            # # Update page confidence value
+            # if page_conf > result_dic['page conf']:
+            #     result_dic['page conf'] = page_conf
+
+            # DEBUG
+            MyU.log_text(f"pp.{page_no},conf={page_conf},zm={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
 
             # SKIP LOW CONFIDENCE ROTATION
             if page_conf < minconf:
                 continue
-
-            # DEBUG
-            print(f"DEBUG : pp.{page_no},conf={page_conf},zm={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
-
+            def update_conf():
+                if result_dic['page conf']==0:
+                    result_dic['page conf'] = page_conf
             # Loop in titles, vendor names, quotation number
             for key in attr_dic.keys():
-
                 # Loop in all tokens
                 for token in attr_dic[key]:
                     if key == 'titles' or key == 'vendor names':
@@ -316,179 +176,183 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
                         # HIT CONDITION
                         #   TODO : hard coding threashold
                         if ss > 0.65:
+                            # update page conf value ONLY when a token hit
+                            update_conf()
                             # trim the 's' in key's tail
                             key_singular = key[:(len(key)-1)]
-                            if ss > ya_rst_dic[key_singular]['ss']:
-                                ya_rst_dic[key_singular]['ss'] = ss
+                            if ss > resultBuffer[key_singular]['ss']:
+                                resultBuffer[key_singular]['ss'] = ss
                                 # solution Title Order, sTO
-                                if ya_rst_dic[key_singular]['text']==attr_dic['titles'][0]:
+                                if resultBuffer[key_singular]['text']==attr_dic['titles'][0]:
                                     pass
                                 else:
-                                    ya_rst_dic[key_singular]['text'] = token
+                                    resultBuffer[key_singular]['text'] = token
                     elif key == 'quotation number':
                         ss, pos_s = testTokenInPage(tok=token, ppStr=page_text)
                         if ss > 0.65:
+                            # update page conf value ONLY when a token hit
+                            update_conf()
                             pos_e = pos_s+len(token)+10
                             qnStr = page_text[pos_s:pos_e]
                             qnInPage = MyU.ya_extract_qn(text=qnStr, yy="24")
                             page_text = cutPage(ppStr=page_text, pos_start=pos_s, cutLen=(pos_e-pos_s+1))
-                            if ss > ya_rst_dic[key]['ss']:
-                                ya_rst_dic[key]['ss'] = ss
-                                ya_rst_dic[key]['text'] = qnInPage
+                            if ss > resultBuffer[key]['ss']:
+                                resultBuffer[key]['ss'] = ss
+                                resultBuffer[key]['text'] = qnInPage
             # To escape rotate trial
-            if ocr_type=='easyocr' and ya_rst_dic['title']['text'] in EscapeTitles:
+            if ocr_type=='easyocr' and resultBuffer['title']['text'] in EscapeTitles:
                 break
         # To escape zoom trial
-        if ocr_type=='tess' and ya_rst_dic['title']['text'] in EscapeTitles:
+        if ocr_type=='tess' and resultBuffer['title']['text'] in EscapeTitles:
             break
-    result_dic['title'] = ya_rst_dic['title']['text']
-    result_dic['vendor name'] = ya_rst_dic['vendor name']['text']
-    result_dic['quotation number'] = ya_rst_dic['quotation number']['text']
+    result_dic['title'] = resultBuffer['title']['text']
+    result_dic['vendor name'] = resultBuffer['vendor name']['text']
+    result_dic['quotation number'] = resultBuffer['quotation number']['text']
     return result_dic
 
+# Define a transaction
+transaction = {
+    'quotation number': 'null',
+    'vendor name': 'null',
+    'titles to have': {
+        "模具付款申請廠商確認書": False,
+        "電子發票證明聯": False,
+        "統一發票": False,
+        "檢查結果連絡書": False,
+        "檢查結果聯絡書": False,
+        "模具修繕申請表": False,
+        "金型修正指示書": False,
+        "設計變更連絡書": False,
+        "設計變更聯絡書": False,
+        "會議記錄": False,
+        "模具資產管理卡": False,
+        "模具重量照片": False
+    }
+}
+
+def process_transaction(page_data):
+    # An un-ocrable page came in
+    if page_data['page conf'] == 0:
+        if transaction['titles to have']['會議記錄'] == False:
+            page_data['title'] = '會議記錄'
+            transaction['titles to have']['會議記錄'] == True
+        else:
+            page_data['title'] = '模具重量照片'
+            transaction['titles to have']['模具重量照片'] == True
+        page_data['vendor name'] = transaction['vendor name']
+        page_data['quotation number'] = transaction['quotation number']
+    else:
+        # This page is ocrable
+        if page_data['vendor name'] and page_data['quotation number']:
+            # New transaction
+            #    When quotation number changed, a new transaction came in
+            if transaction['quotation number'] != page_data['quotation number']:
+                transaction['vendor name'] = page_data['vendor name']
+                transaction['quotation number'] =page_data['quotation number']
+                # Reset titles' appearances
+                for key in transaction['titles to have']:
+                    transaction['titles to have'][key] = False
+        # WARNING! FILL IN VALUES IN CASE OF UN-OCRABLE VALUES HAPPENED
+        if not page_data['vendor name']:
+            page_data['vendor name'] = transaction['vendor name']
+        if not page_data['quotation number']:
+            page_data['quotation number'] = transaction['quotation number']
+        # Register title appearance
+        if page_data['title']:
+            if page_data['title'] in transaction['titles to have'].keys():
+                transaction['titles to have'][page_data['title']] = True
+    return f"{page_data['quotation number']}_{page_data['vendor name']}_{page_data['title']}.pdf"
+
 # To iterate in a pdf file
-#  Input : a pymupdf pdf object
-def iterateInPdf(pdf=None):
-    if pdf==None:
-        return None
+def iterateInPdf(pdffn, ocr_command, do_plain=False, do_log=False, batch=None):
+    global ocr_engine
+
     # Load config_ocr.json
     attr_dic = MyU.loadPageAttrFromJson()
-    # Define a transaction
-    transaction = {
-        'quotation number': 'null',
-        'vendor name': 'null',
-        'titles to have': {
-            "模具付款申請廠商確認書": False,
-            "電子發票證明聯": False,
-            "統一發票": False,
-            "檢查結果連絡書": False,
-            "模具修繕申請表": False,
-            "金型修正指示書": False,
-            "設計變更連絡書": False,
-            "會議記錄": False,
-            "模具資產管理卡": False,
-            "模具重量照片": False
-        }
-    }
 
-    def process_transaction(page_data):
-        # An un-ocrable page came in
-        if page_data['page conf'] < 10:
-        # if page_data['title'] == '' and page_data['vendor name'] == '' and page_data['quotation number'] == '':
-            if transaction['titles to have']['會議記錄'] == False:
-                page_data['title'] = '會議記錄'
-                transaction['titles to have']['會議記錄'] == True
-            else:
-                page_data['title'] = '模具重量照片'
-                transaction['titles to have']['模具重量照片'] == True
-            page_data['vendor name'] = transaction['vendor name']
-            page_data['quotation number'] = transaction['quotation number']
-        else:
-            # This page is ocrable
-            if page_data['vendor name'] and page_data['quotation number']:
-                # New transaction
-                #    When quotation number changed, a new transaction came in
-                if transaction['quotation number'] != page_data['quotation number']:
-                    transaction['vendor name'] = page_data['vendor name']
-                    transaction['quotation number'] =page_data['quotation number']
-                    # Reset titles' appearances
-                    for key in transaction['titles to have']:
-                        transaction['titles to have'][key] = False
-            # WARNING! FILL IN VALUES IN CASE OF UN-OCRABLE VALUES HAPPENED
-            if not page_data['vendor name']:
-                page_data['vendor name'] = transaction['vendor name']
-            if not page_data['quotation number']:
-                page_data['quotation number'] = transaction['quotation number']
-            # Register title appearance
-            if page_data['title']:
-                if page_data['title'] in transaction['titles to have'].keys():
-                    transaction['titles to have'][page_data['title']] = True
+    if not os.path.isfile(pdffn) or 'pdf' not in pdffn:
+        print(f"Wrong! {pdffn} NOT exists or NOT a pdf file!")
+        return -1
+    theDoc = openPDF(fn=pdffn)
+    if theDoc==None:
+        print(f"FATAL ERROR! failed in open {pdffn}")
+        return -1
 
+    ocr_command()
+    ocr_engine.Init()
 
-        return f"{page_data['quotation number']}_{page_data['vendor name']}_{page_data['title']}.pdf"
+    if batch == None:
+        batch = list(range(theDoc.page_count))
+        MyU.set_log(dolog=False)
+        reallyToDoPlain = False
+    else:
+        MyU.set_log(dolog=do_log)
+        reallyToDoPlain = do_plain
 
     # Loop in all pages in pdf
-    for i in range(pdf.page_count):
-        page = pdf.load_page(i)
+    for i in batch:
+        if len(batch) < theDoc.page_count:
+            i = i-1
+        page = theDoc.load_page(i)
+        if reallyToDoPlain==False:
+            debug_msg = f"Do page {i+1} "
+            pp_dic = doMyOnePage(page=page, attr_dic=attr_dic, page_no=(i+1))
+            filepath = process_transaction(page_data=pp_dic)
+            print(f"{debug_msg}filepath={filepath}")
+        else:
+            MyU.set_log(dolog=True)
+            img = getPageImg(page=page, zoom=2.0)
+            ocr_engine.ReadImage(image=img, do_plain=True)
 
-        debug_msg = f"Do page {i+1} "
-        # To parse a page to title, vendor name, quotation number and get page image in pp_dic
-        pp_dic = doMyOnePage(page=page, attr_dic=attr_dic, page_no=(i+1))
-
-        filepath = process_transaction(page_data=pp_dic)
-        print(f"{debug_msg}filepath={filepath}")
-        # print(f"DEBUG : iterate page{i}, title={pp_dic['title']}, vn={pp_dic['vendor name']}, qn={pp_dic['quotation number']}")
-        # # DEBUG : Show image
-        # pil_img = Image.fromarray(pp_dic['image'])
-        # pil_img.show()
+    theDoc.close()
     return 0
 
 def main():
-    global ocr_engine
-    if len(sys.argv) < 3:
+    theArgc = len(sys.argv)
+    if theArgc < 3:
         path_strs = __file__.split('\\')
         exename = path_strs[len(path_strs)-1]
-        print(f"Usage: python {exename} Filepath Option")
+        print(f"Usage: python {exename} Filepath ocr_type option")
         print(f"\tFilepath : pdf file")
-        print(f"\tOption :")
+        print(f"\tocr_type :")
         print(f"\t\tuse_tess : to do mold transaction ocr using tesseract")
         print(f"\t\tuse_easy : to do mold transaction ocr using EasyOCR")
-        print(f"\t\tplain_ocr : to do plain ocr using tesseract")
-        print(f"\t\tjustocr page_numer... : just do mold transaction ocr to the designated page(s) to 1-page file(s), page_number count from 1, using tess.")
+        print(f"\toption :")
+        print(f"\t\t<page_numer...> : do mold trans to the designated page(s), count from 1")
+        print(f"\t\tlog <page_numer...>: do mold transaction with log output")
+        print(f"\t\tplain <page_numer...>: do plain ocr and just print results(lbox, str, conf)")
         exit(-1)
-    fn = sys.argv[1]
-    if not os.path.isfile(fn) or 'pdf' not in fn:
-        print(f"Wrong! {fn} NOT exists or NOT a pdf file!")
-        exit(-1)
-    theDoc = openPDF(fn=fn)
-    if theDoc==None:
-        print(f"Failed in open {fn}!")
-        exit(-1)
-    vectortable_ocr_usage = {
+
+    useWhichOcr = {
         'use_tess': use_tess,
-        'use_easy': use_easyocr,
-        'plain_ocr': use_tess,
-        'justocr': use_easyocr
+        'use_easy': use_easyocr
     }
-    vectortable_ocr_usage[sys.argv[2]]()
-    ocr_engine.Init()
-    # if sys.argv[2] == 'use_tess':
-    if sys.argv[2] == 'use_tess' or sys.argv[2] == 'use_easy':
-        iterateInPdf(pdf=theDoc)
-    # elif sys.argv[2] == 'use_tess':
-    #     print(f"Temporarily DON'T support EasyOCR!")
-    #     theDoc.close()
-    #     exit(-1)
-    elif sys.argv[2] == 'plain_ocr':
-        for i in range(theDoc.page_count):
-            page = theDoc.load_page(i)
-            zoom = 2.5
-            mtrx = pmpdf.Matrix(zoom, zoom)
-            pp_pix = page.get_pixmap(matrix=mtrx)
-            pp_img = Image.frombytes("RGB", [pp_pix.width, pp_pix.height], pp_pix.samples)
-            page_conf, page_text, page_img = ocr_engine.ReadImage(image=pp_img, ccw=0, zoom=1.0)
-            print(f"page_conf={page_conf}")
-            print(f"page_text={page_text}")
-            pil_img = Image.fromarray(page_img)
-            pil_img.show()
-    elif sys.argv[2] == 'justocr':
-        designated_pages = sys.argv[3:len(sys.argv)]
-        for pp in designated_pages:
-            ppno = int(pp) - 1
-            attr_dic = MyU.loadPageAttrFromJson()
-            if ppno < theDoc.page_count:
-                page = theDoc.load_page(ppno)
+    if not sys.argv[2] in useWhichOcr.keys():
+        print(f"\tUnknown ocr type, {sys.argv[2]}")
+        exit(-1)
 
-                # To parse a page to title, vendor name, quotation number and get page image in pp_dic
-                pp_dic = doMyOnePage(page=page, attr_dic=attr_dic, page_no=(ppno+1))
+    flags = {
+        'plain': False,
+        'log': False
+    }
+    batch_list = None
 
-                print(f"DEBUG : iterate page{ppno+1}, title={pp_dic['title']}, vn={pp_dic['vendor name']}, qn={pp_dic['quotation number']}")
-                # # DEBUG : Show image
-                # pil_img = Image.fromarray(pp_dic['image'])
-                # pil_img.show()
-    else:
-        pass
-    theDoc.close()
+    if theArgc > 3:
+        if sys.argv[3] in flags.keys():
+            flags[sys.argv[3]] = True
+            for_diff = 4
+            if theArgc > 4:
+                batch_list = []
+        else:
+            for_diff = 3
+            batch_list = []
+
+    if theArgc > 3:
+        for i in range(theArgc - for_diff):
+            batch_list.append(int(sys.argv[for_diff + i]))
+
+    iterateInPdf(pdffn=sys.argv[1], ocr_command=useWhichOcr[sys.argv[2]], do_plain=flags['plain'], do_log=flags['log'], batch=batch_list)
+
     return 0
 
 if __name__ == "__main__":
