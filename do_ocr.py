@@ -4,6 +4,7 @@ from PIL import Image
 import pymupdf as pmpdf
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import my_util as MyU
+import re
 
 ocr_engine = None
 ocr_type = 'tess'
@@ -124,7 +125,6 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
         "電子發票證明聯",
         "統一發票",
         "檢查結果連絡書",
-        "檢查結果聯絡書",
         "模具修繕申請表",
         "金型修正指示書",
         "設計變更連絡書",
@@ -215,30 +215,30 @@ transaction = {
     'quotation number': 'null',
     'vendor name': 'null',
     'titles to have': {
-        "模具付款申請廠商確認書": False,
-        "電子發票證明聯": False,
-        "統一發票": False,
-        "檢查結果連絡書": False,
-        "檢查結果聯絡書": False,
-        "模具修繕申請表": False,
-        "金型修正指示書": False,
-        "設計變更連絡書": False,
-        "設計變更聯絡書": False,
-        "會議記錄": False,
-        "模具資產管理卡": False,
-        "模具重量照片": False
+        '模具付款申請廠商確認書': False,
+        '電子發票證明聯': False,
+        '統一發票': False,
+        '檢查結果連絡書': False,
+        '模具修繕申請表': False,
+        '金型修正指示書': False,
+        '設計變更連絡書': False,
+        '設計變更聯絡書': False,
+        '模具資產管理卡': False,
+        '會議記錄': False,
+        '模具重量照片': False
     }
 }
 
 def process_transaction(page_data):
+    MyU.log_text(f"transaction={transaction}")
     # An un-ocrable page came in
     if page_data['page conf'] == 0:
         if transaction['titles to have']['會議記錄'] == False:
             page_data['title'] = '會議記錄'
-            transaction['titles to have']['會議記錄'] == True
+            transaction['titles to have']['會議記錄'] = True
         else:
             page_data['title'] = '模具重量照片'
-            transaction['titles to have']['模具重量照片'] == True
+            transaction['titles to have']['模具重量照片'] = True
         page_data['vendor name'] = transaction['vendor name']
         page_data['quotation number'] = transaction['quotation number']
     else:
@@ -291,14 +291,13 @@ def iterateInPdf(pdffn, ocr_command, do_plain=False, do_log=False, batch=None):
 
     # Loop in all pages in pdf
     for i in batch:
-        if len(batch) < theDoc.page_count:
-            i = i-1
-        page = theDoc.load_page(i)
+        ppno = i-1
+        page = theDoc.load_page(ppno)
         if reallyToDoPlain==False:
-            debug_msg = f"Do page {i+1} "
-            pp_dic = doMyOnePage(page=page, attr_dic=attr_dic, page_no=(i+1))
+            debug_msg = f"Do page {i} "
+            pp_dic = doMyOnePage(page=page, attr_dic=attr_dic, page_no=i)
             filepath = process_transaction(page_data=pp_dic)
-            print(f"{debug_msg}filepath={filepath}")
+            print(f"{debug_msg}conf={pp_dic['page conf']:2.2f},filepath={filepath}")
         else:
             MyU.set_log(dolog=True)
             img = getPageImg(page=page, zoom=2.0)
@@ -308,6 +307,7 @@ def iterateInPdf(pdffn, ocr_command, do_plain=False, do_log=False, batch=None):
     return 0
 
 def main():
+    # Check the argv
     theArgc = len(sys.argv)
     if theArgc < 3:
         path_strs = __file__.split('\\')
@@ -322,7 +322,7 @@ def main():
         print(f"\t\tlog <page_numer...>: do mold transaction with log output")
         print(f"\t\tplain <page_numer...>: do plain ocr and just print results(lbox, str, conf)")
         exit(-1)
-
+    # Check ocr type
     useWhichOcr = {
         'use_tess': use_tess,
         'use_easy': use_easyocr
@@ -330,27 +330,48 @@ def main():
     if not sys.argv[2] in useWhichOcr.keys():
         print(f"\tUnknown ocr type, {sys.argv[2]}")
         exit(-1)
-
+    # For checkint flags
     flags = {
         'plain': False,
         'log': False
     }
+    # Create an empty batch list
     batch_list = None
-
+    # Check flags and batch's string range
     if theArgc > 3:
+        # Valid flags exist
         if sys.argv[3] in flags.keys():
+            # Set flag
             flags[sys.argv[3]] = True
+            # Batch list string range confirmed
             for_diff = 4
+            # A batch list exits
             if theArgc > 4:
                 batch_list = []
         else:
+            # Batch list string range confirmed
             for_diff = 3
+            # A batch list exits
             batch_list = []
+        # Make batch list
+        the_remain = sys.argv[for_diff:]
 
-    if theArgc > 3:
-        for i in range(theArgc - for_diff):
-            batch_list.append(int(sys.argv[for_diff + i]))
-
+        str = ''.join(the_remain)
+        # Find out delimiters' existence '-', ','
+        punc = re.findall(r'[^\w\w]', str)
+        # Delimiter exists
+        if len(punc) > 0:
+            the_list = str.split(punc[0])
+        # No delimiter
+        else:
+            the_list = the_remain
+        # Batch is start~stop type
+        if len(the_list) == 2:
+            batch_list=list(range(int(the_list[0]),(int(the_list[1])+1)))
+        # Batch is discrete page numbers
+        else:
+            batch_list=[int(c) for c in the_list]
+    # To OCR a pdf
     iterateInPdf(pdffn=sys.argv[1], ocr_command=useWhichOcr[sys.argv[2]], do_plain=flags['plain'], do_log=flags['log'], batch=batch_list)
 
     return 0
