@@ -6,7 +6,7 @@ from random import randrange
 import tkinter as tk
 from tkinter import ttk
 from tkinter import *
-import tkinterDnD as dnd
+import tkinterDnD as tkdnd
 import pymupdf as fitz
 from PIL import Image, ImageTk
 
@@ -17,7 +17,8 @@ def main():
     except Exception as e:
         print(f"Error! {e}")
 
-    root = tk.Tk()
+    # root = tk.Tk()
+    root = tkdnd.Tk()
     root.title(f"{__name__}")
     root_width = 800
     root_aspect = "4:3"
@@ -58,14 +59,6 @@ def main():
     pages_label = tk.Label(lf_pages, text='null(all)  1,2,3  1-3 ')
     pages_label.pack()
 
-    fram_lft = ttk.Frame(root, borderwidth=1, relief='solid', height=int(root_height), width=int(root_width/2))
-    fram_lft.pack(side='left', fill='both', expand=True, padx=5, pady=5, )
-    cnvs = tk.Canvas(fram_lft)
-    scrbar = tk.Scrollbar(fram_lft, orient="vertical", command=cnvs.yview)
-    fram_scrbar = tk.Frame(cnvs)
-    fram_scrbar.bind("<Configure>", lambda e: cnvs.configure(scrollregion=cnvs.bbox("all")))
-    cnvs.create_window((0,0), window=fram_scrbar, anchor="nw")
-    cnvs.configure(yscrollcommand=scrbar.set)
     def show_img_label(img=None, ppno=0)->None:
         ppno_lbl = tk.Label(fram_scrbar, text=f"pp.{ppno}")
         ppno_lbl.pack()
@@ -83,20 +76,36 @@ def main():
         fram_scrbar.update_idletasks()
         cnvs.config(scrollregion=cnvs.bbox("all"))
         return i+1
-    try:
-        pdffn = ".\\test_data\\test_70.pdf"
-        doc = fitz.open(pdffn)
-        n = show_pdf_images(doc=doc, zoom=0.5)
-        cnvs.pack(side="left", fill="both", expand=True)
-        scrbar.pack(side="right", fill="y")
-    except Exception as e:
-        pass
-    finally:
-        print(f"pdffn={pdffn}")
-        print(f"doc.page_count={doc.page_count}")
-        print(f"{n}-page processed.")
-        print(f"last i={i}")
-        doc.close()
+    def drop(event):
+        try:
+            pdffn = event.data
+            doc = fitz.open(pdffn)
+            n = show_pdf_images(doc=doc, zoom=0.5)
+            # cnvs.pack(side="left", fill="both", expand=True)
+            # scrbar.pack(side="right", fill="y")
+        except Exception as e:
+            print(f"drop()() Error={e}")
+        finally:
+            print(f"pdffn={pdffn}")
+            print(f"doc.page_count={doc.page_count}")
+            print(f"{n}-page processed.")
+            print(f"last i={i}")
+            doc.close()
+
+    fram_lft = ttk.Frame(root, borderwidth=1, relief='solid', height=int(root_height), width=int(root_width/2))
+    fram_lft.pack(side='left', fill='both', expand=True, padx=5, pady=5, )
+    cnvs = tk.Canvas(fram_lft)
+    scrbar = tk.Scrollbar(fram_lft, orient="vertical", command=cnvs.yview)
+    fram_scrbar = tk.Frame(cnvs)
+    fram_scrbar.bind("<Configure>", lambda e: cnvs.configure(scrollregion=cnvs.bbox("all")))
+    cnvs.create_window((0,0), window=fram_scrbar, anchor="nw")
+    cnvs.configure(yscrollcommand=scrbar.set)
+    scrbar.config(command=cnvs.yview)
+    cnvs.register_drop_target("*")
+    cnvs.bind("<<Drop>>", drop)
+    cnvs.pack(side="left", fill="both", expand=True)
+    scrbar.pack(side="right", fill="y")
+
     root.mainloop()
 
 if __name__ == "__main__":
