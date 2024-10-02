@@ -6,10 +6,11 @@ from random import randrange
 import tkinter as tk
 from tkinter import ttk
 from tkinter import *
+import tkinterDnD as dnd
 import pymupdf as fitz
 from PIL import Image, ImageTk
 
-def gui_main():
+def main():
     try:
         cfg_ocr = MyU.load_config('config_ocr.json')
         settings = cfg_ocr.get('ocr settings',{})
@@ -23,10 +24,10 @@ def gui_main():
     root_height = int(root_width*int(root_aspect.split(':')[1])/int(root_aspect.split(':')[0]))
     root.geometry(f"{root_width}x{root_height}")
 
-    frame_right = ttk.Frame(root, borderwidth=2, relief='solid')
-    frame_right.pack(side='right', fill='both', expand=True, padx=5, pady=5)
+    fram_rt = ttk.Frame(root, borderwidth=2, relief='solid')
+    fram_rt.pack(side='right', fill='both', expand=True, padx=5, pady=5)
 
-    lf_ocrType = tk.LabelFrame(frame_right, text="OCR type:", padx=5, pady=5)
+    lf_ocrType = tk.LabelFrame(fram_rt, text="OCR type:", padx=5, pady=5)
     lf_ocrType.pack()
     ocrType = tk.StringVar(value='use_easy')
     def foo():
@@ -38,7 +39,7 @@ def gui_main():
         radioButtons.append(tk.Radiobutton(lf_ocrType, anchor='w', text=ele, variable=ocrType, value=ele, command=foo))
         radioButtons[i].pack()
 
-    lf_ocrOption = tk.LabelFrame(frame_right, text="Option:", padx=5, pady=5)
+    lf_ocrOption = tk.LabelFrame(fram_rt, text="Option:", padx=5, pady=5)
     lf_ocrOption.pack()
     checkButtons=[]
     options={}
@@ -49,7 +50,7 @@ def gui_main():
         checkButtons.append(tk.Checkbutton(lf_ocrOption, anchor='w', text=ele, variable=strVars[i], onvalue='True', offvalue='False', command=foo))
         checkButtons[i].pack()
 
-    lf_pages = tk.LabelFrame(frame_right, text='Pages:', padx=5, pady=5)
+    lf_pages = tk.LabelFrame(fram_rt, text='Pages:', padx=5, pady=5)
     lf_pages.pack()
     pages = tk.StringVar(value='')
     pages_pages = tk.Entry(lf_pages, textvariable=pages)
@@ -57,54 +58,46 @@ def gui_main():
     pages_label = tk.Label(lf_pages, text='null(all)  1,2,3  1-3 ')
     pages_label.pack()
 
-    frame_left = ttk.Frame(root, borderwidth=1, relief='solid', height=int(root_height), width=int(root_width/2))
-    frame_left.pack(side='left', fill='both', expand=True, padx=5, pady=5, )
-    scrollbar = tk.Scrollbar(frame_left)
-    scrollbar.pack(side='right', fill='y')
-
-    canvas = tk.Canvas(frame_left, bg='lightblue', yscrollcommand=scrollbar.set)
-    canvas.pack(side='left', fill='both', expand=True)
-
-    zoom = 0.5
-    mtx = fitz.Matrix(zoom, zoom)
-    def pdf_to_img(ppno):
-        pp = doc.load_page(ppno)
-        pix = pp.get_pixmap(matrix=mtx)
-        return Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-    def show_image(ppno):
-        img = pdf_to_img(ppno=ppno)
+    fram_lft = ttk.Frame(root, borderwidth=1, relief='solid', height=int(root_height), width=int(root_width/2))
+    fram_lft.pack(side='left', fill='both', expand=True, padx=5, pady=5, )
+    cnvs = tk.Canvas(fram_lft)
+    scrbar = tk.Scrollbar(fram_lft, orient="vertical", command=cnvs.yview)
+    fram_scrbar = tk.Frame(cnvs)
+    fram_scrbar.bind("<Configure>", lambda e: cnvs.configure(scrollregion=cnvs.bbox("all")))
+    cnvs.create_window((0,0), window=fram_scrbar, anchor="nw")
+    cnvs.configure(yscrollcommand=scrbar.set)
+    def show_img_label(img=None, ppno=0)->None:
+        ppno_lbl = tk.Label(fram_scrbar, text=f"pp.{ppno}")
+        ppno_lbl.pack()
         img_tk = ImageTk.PhotoImage(img)
-        frame = tk.Frame(canvas)
-        panel = tk.Label(frame, image=img_tk, text=f"page{i+1}")
-        panel.pack(side='bottom', fill="both", expand=True)
-        frame.image = img_tk
-        canvas.create_window(0,int(i*img_tk.height()),anchor='nw',window=frame)
-        frame.update_idletasks()
-        canvas.config(scrollregion=canvas.bbox("all"))
+        img_lbl = tk.Label(fram_scrbar, image=img_tk)
+        img_lbl.image = img_tk
+        img_lbl.pack()
+    def show_pdf_images(doc=None, zoom=1.0)->int:
+        mtrx = fitz.Matrix(zoom, zoom)
+        for i in range(doc.page_count):
+            pp = doc.load_page(i)
+            pix = pp.get_pixmap(matrix=mtrx)
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            show_img_label(img=img,ppno=(i+1))
+        fram_scrbar.update_idletasks()
+        cnvs.config(scrollregion=cnvs.bbox("all"))
+        return i+1
     try:
-        pdffn = ".\\test_data\\rearranged.pdf"
+        pdffn = ".\\test_data\\test_70.pdf"
         doc = fitz.open(pdffn)
-        for i in range(doc.page_count):
-            show_image(i)
-        scrollbar.config(command=canvas.yview)
+        n = show_pdf_images(doc=doc, zoom=0.5)
+        cnvs.pack(side="left", fill="both", expand=True)
+        scrbar.pack(side="right", fill="y")
     except Exception as e:
-        print(f"gui_main() error={e}")
-        doc.close()
-
-    root.mainloop()
-    doc.close()
-
-def main():
-    pdffn = ".\\test_data\\rearranged.pdf"
-    doc = fitz.open(pdffn)
-    try:
-        for i in range(doc.page_count):
-            pass
-    except Exception as e:
-        print(f"main() error={e}")
+        pass
     finally:
+        print(f"pdffn={pdffn}")
+        print(f"doc.page_count={doc.page_count}")
+        print(f"{n}-page processed.")
+        print(f"last i={i}")
         doc.close()
+    root.mainloop()
 
 if __name__ == "__main__":
-    gui_main()
-    # main()
+    main()
