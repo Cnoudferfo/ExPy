@@ -282,7 +282,7 @@ def iterateInPdf(pdffn, ocr_command, do_plain=False, do_log=False, batch=None):
     ocr_engine.Init()
 
     if batch == None:
-        batch = list(range(theDoc.page_count))
+        batch = list(range(1, theDoc.page_count+1))
         MyU.set_log(dolog=False)
         reallyToDoPlain = False
     else:
