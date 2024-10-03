@@ -8,6 +8,7 @@ import re
 
 ocr_engine = None
 ocr_type = 'tess'
+callFromUI = False
 
 def use_tess():
     global ocr_engine
@@ -229,7 +230,8 @@ transaction = {
     }
 }
 
-def process_transaction(page_data):
+def process_transaction(page_data) -> str:
+    global callFromUI
     MyU.log_text(f"transaction={transaction}")
     # An un-ocrable page came in
     if page_data['page conf'] == 0:
@@ -261,10 +263,67 @@ def process_transaction(page_data):
         if page_data['title']:
             if page_data['title'] in transaction['titles to have'].keys():
                 transaction['titles to have'][page_data['title']] = True
-    return f"{page_data['quotation number']}_{page_data['vendor name']}_{page_data['title']}.pdf"
+    if callFromUI == True:
+        s1 = f"{page_data['quotation number']}\n"
+        s2 = f"{page_data['vendor name']}\n"
+        s3 = f"{page_data['title']}"
+        return s1+s2+s3
+    else:
+        return f"{page_data['quotation number']}_{page_data['vendor name']}_{page_data['title']}.pdf"
 
-# To iterate in a pdf file
-def iterateInPdf(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_log=False, batch=None) -> int:
+# To iterate in a pdf file, called from UI
+def iterateInPdf_UI(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_log=False, batch=None):
+    global ocr_engine
+    global callFromUI
+
+    callFromUI = True
+
+    # Load config_ocr.json
+    attr_dic = MyU.loadPageAttrFromJson()
+
+    if not os.path.isfile(pdffn) or 'pdf' not in pdffn:
+        raise Exception(f"Wrong! {pdffn} NOT exists or NOT a pdf file!")
+    theDoc = openPDF(fn=pdffn)
+    if theDoc==None:
+        raise Exception(f"FATAL ERROR! failed in open {pdffn}")
+
+    if ocr_command:
+        ocr_command()
+    elif ocr_type=='use_easy':
+        use_easyocr()
+    elif ocr_type=='use_tess':
+        use_tess()
+    else:
+        raise Exception(f"Unknown ocr type:{ocr_type}")
+
+    ocr_engine.Init()
+
+    if batch == None:
+        batch = list(range(1, theDoc.page_count+1))
+        MyU.set_log(dolog=False)
+        reallyToDoPlain = False
+    else:
+        MyU.set_log(dolog=do_log)
+        reallyToDoPlain = do_plain
+
+    # Loop in all pages in pdf
+    for i in batch:
+        ppno = i-1
+        page = theDoc.load_page(ppno)
+        if reallyToDoPlain==False:
+            debug_msg = f"Do page {i} "
+            pp_dic = doMyOnePage(page=page, attr_dic=attr_dic, page_no=i)
+            ret_str = process_transaction(page_data=pp_dic)
+            yield f"Page_{i}\n" + ret_str
+        else:
+            MyU.set_log(dolog=True)
+            img = getPageImg(page=page, zoom=2.0)
+            ocr_engine.ReadImage(image=img, do_plain=True)
+    theDoc.close()
+    yield ''
+
+# To iterate in a pdf file called from command line
+def iterateInPdf(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_log=False, batch=None)->int:
     global ocr_engine
 
     # Load config_ocr.json
@@ -302,13 +361,12 @@ def iterateInPdf(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_log=Fa
         if reallyToDoPlain==False:
             debug_msg = f"Do page {i} "
             pp_dic = doMyOnePage(page=page, attr_dic=attr_dic, page_no=i)
-            filepath = process_transaction(page_data=pp_dic)
-            print(f"{debug_msg}conf={pp_dic['page conf']:2.2f},filepath={filepath}")
+            ret_str = process_transaction(page_data=pp_dic)
+            print(f"{debug_msg}conf={pp_dic['page conf']:2.2f},filepath={ret_str}")
         else:
             MyU.set_log(dolog=True)
             img = getPageImg(page=page, zoom=2.0)
             ocr_engine.ReadImage(image=img, do_plain=True)
-
     theDoc.close()
     return 0
 
