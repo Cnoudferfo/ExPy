@@ -264,21 +264,27 @@ def process_transaction(page_data):
     return f"{page_data['quotation number']}_{page_data['vendor name']}_{page_data['title']}.pdf"
 
 # To iterate in a pdf file
-def iterateInPdf(pdffn, ocr_command, do_plain=False, do_log=False, batch=None):
+def iterateInPdf(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_log=False, batch=None) -> int:
     global ocr_engine
 
     # Load config_ocr.json
     attr_dic = MyU.loadPageAttrFromJson()
 
     if not os.path.isfile(pdffn) or 'pdf' not in pdffn:
-        print(f"Wrong! {pdffn} NOT exists or NOT a pdf file!")
-        return -1
+        raise Exception(f"Wrong! {pdffn} NOT exists or NOT a pdf file!")
     theDoc = openPDF(fn=pdffn)
     if theDoc==None:
-        print(f"FATAL ERROR! failed in open {pdffn}")
-        return -1
+        raise Exception(f"FATAL ERROR! failed in open {pdffn}")
 
-    ocr_command()
+    if ocr_command:
+        ocr_command()
+    elif ocr_type=='use_easy':
+        use_easyocr()
+    elif ocr_type=='use_tess':
+        use_tess()
+    else:
+        raise Exception(f"Unknown ocr type:{ocr_type}")
+
     ocr_engine.Init()
 
     if batch == None:

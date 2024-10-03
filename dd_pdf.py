@@ -5,7 +5,7 @@ from tkinter import ttk
 import tkinterDnD
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import do_ocr as doo
+import do_ocr as Doo
 
 root = None
 progressBar = None
@@ -67,7 +67,7 @@ def main():
                 return
 
             # call Do_ocr
-            doo.Do_ocr(pdfFilePath = event.data, pgCommand = progress_callback)
+            Doo.Do_ocr(pdfFilePath = event.data, pgCommand = progress_callback)
 
             # To display OCR result
             tw_set_string(str=textInTw)
@@ -105,9 +105,9 @@ def main():
     tw_set_string(str=f"OCR = {sys.argv[1]}\n")
 
     if sys.argv[1] == 'use_tess':
-        doo.use_tess()
+        Doo.use_tess()
     else:
-        doo.use_easyocr()
+        Doo.use_easyocr()
 
     tw_insert_string(str="Drop a PDF here.")
     # Bind drop event to text widget

@@ -33,6 +33,11 @@
         "ocr types": ["use_easy", "use_tess"],
         "ocr options": ["log", "plain"]
     },
+    "gui settings": {
+        "root aspect": "4:3",
+        "root width": 800,
+        "thumbnail zoom": 0.25
+    },
     "a transaction": [
         {
             "vendor name": "",
