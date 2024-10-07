@@ -15,7 +15,9 @@ import re
 # Globale variables
 theConfig = None
 theFilepath = ''
-thePageInfos=[]  # page infos: a list to store all pages' information of drooped pdf
+thePpInfoStrs=[]  # page infos: a list to store all pages' information of drooped pdf
+thePpImgLbls=[]   # images
+thePpInfoLbls=[]  # page numbers
 thePageEdits = {
     'page no': None,
     'quotation number': None,
@@ -47,7 +49,8 @@ def createOcrSettingUI(parent) -> ttk.Frame:
     # Call do_ocr.py.iterateInPdf() when Do OCR button pressed
     def on_clickButton():
         global theFilepath
-        global thePageInfos
+        global thePpInfoStrs
+        global thePpInfoLbls
         pps = pages.get().replace(' ','')
         if not pps:
             print(f"Empty pages, set batch to None.")
@@ -66,17 +69,26 @@ def createOcrSettingUI(parent) -> ttk.Frame:
             else:
                 batch_list = [int(c) for c in the_list]
         try:
-            r = Doo.iterateInPdf_UI(pdffn=theFilepath, ocr_type=ocrType.get(), batch=batch_list, do_log=options['log'], do_plain=options['plain'])
+            # Call Do_ocr.py's iterateInPdf() generatorversion
+            r = Doo.gen_iterateInPdf(pdffn=theFilepath,\
+                                      ocr_type=ocrType.get(),\
+                                      batch=batch_list,\
+                                      do_log=options['log'],\
+                                      do_plain=options['plain'])
+            # Receive all the page information
             i = 0
             while True:
                 p = next(r)
                 if not p:
-                    print("while true was broken!")
                     break
                 else:
                     print(f"p={p}")
-                    thePageInfos[i].set(value=p)
+                    thePpInfoStrs[i].set(value=p)
+                    thePpInfoLbls[i].update()
                 i += 1
+                # Just in case
+                if i > 1000:
+                    break
         except Exception as e:
             print(f"Exception={e}")
     # ocr settings
@@ -118,7 +130,9 @@ def createOcrSettingUI(parent) -> ttk.Frame:
 def createPdfDisplayUI(parent) -> ttk.Frame:
     global theConfig
     global theFilepath
-    global thePageInfos
+    global thePpInfoStrs
+    global thePpImgLbls
+    global thePpInfoLbls
     global thePageEdits
     # Display PDF
     #  Create image label
@@ -137,30 +151,30 @@ def createPdfDisplayUI(parent) -> ttk.Frame:
             pix = pp.get_pixmap(matrix=mtrx)
             img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             iL, pL = make_labels(img=img,ppno=(i+1))
-            img_labels.append(iL)
-            pno_labels.append(pL)
+            thePpImgLbls.append(iL)
+            thePpInfoLbls.append(pL)
             sss = f"page.{i+1}\n" + f"unknownQn\n" + f"unknownVn\n" + f"unknownTt"
-            thePageInfos.append(tk.StringVar(value=sss))
-            pno_labels[i].config(textvar=thePageInfos[i])
-            img_labels[i].grid(column=0, row=i)
-            pno_labels[i].grid(column=1, row=i)
+            thePpInfoStrs.append(tk.StringVar(value=sss))
+            thePpInfoLbls[i].config(textvar=thePpInfoStrs[i])
+            thePpImgLbls[i].grid(column=0, row=i)
+            thePpInfoLbls[i].grid(column=1, row=i)
         fram_scrbar.update_idletasks()
         cnvs.config(scrollregion=cnvs.bbox("all"))
         return i+1
     # To receive a dropped pdf file
     def resetPdf() -> None:
-        if len(img_labels):
-            for im in img_labels:
+        if len(thePpImgLbls):
+            for im in thePpImgLbls:
                 im.destroy()
-            del(img_labels[:])
-        if len(pno_labels):
-            for n in pno_labels:
+            del(thePpImgLbls[:])
+        if len(thePpInfoLbls):
+            for n in thePpInfoLbls:
                 n.destroy()
-            del(pno_labels[:])
-        if len(thePageInfos):
-            for p in thePageInfos:
+            del(thePpInfoLbls[:])
+        if len(thePpInfoStrs):
+            for p in thePpInfoStrs:
                 p.set('')
-            del(thePageInfos[:])
+            del(thePpInfoStrs[:])
         for key in thePageEdits.keys():
             thePageEdits[key].set('')
     def on_drop(event):
@@ -184,7 +198,7 @@ def createPdfDisplayUI(parent) -> ttk.Frame:
     # Mouse left click
     def on_leftClick(event):
         dic = {}
-        ls = thePageInfos[img_labels.index(event.widget)].get().split('\n')
+        ls = thePpInfoStrs[thePpImgLbls.index(event.widget)].get().split('\n')
         for i, key in enumerate(thePageEdits.keys()):
             dic[key] = ls[i]
         to_updatePageEdit(pp_dic=dic)
@@ -204,8 +218,6 @@ def createPdfDisplayUI(parent) -> ttk.Frame:
     scrbar.pack(side="right", fill="y")
     cnvs.bind("<MouseWheel>", on_mouseWheel)
     # Create empty list
-    img_labels=[]  # images
-    pno_labels=[]  # page numbers
     return fram_lft
 
 def to_updatePageEdit(pp_dic=None) -> None:
@@ -232,6 +244,7 @@ def createPageEditUI(parent) -> ttk.Frame:
         lbls[i].grid(column=0, row=i, sticky="nsew")
         etys.append(tk.Entry(lbfrm, textvariable=thePageEdits[key]))
         etys[i].grid(column=1, row=i, sticky="ew")
+
     btn = tk.Button(lbfrm, text="Change it!", command=on_clickToChange, foreground="black", background="pink")
     btn.grid(column=0, columnspan=2, row=4, sticky="nsew")
     lbfrm.pack(pady=10, padx=10, expand=True, fill='both')

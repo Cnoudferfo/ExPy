@@ -272,7 +272,7 @@ def process_transaction(page_data) -> str:
         return f"{page_data['quotation number']}_{page_data['vendor name']}_{page_data['title']}.pdf"
 
 # To iterate in a pdf file, called from UI
-def iterateInPdf_UI(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_log=False, batch=None):
+def gen_iterateInPdf(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_log=False, batch=None):
     global ocr_engine
     global callFromUI
 

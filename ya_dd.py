@@ -40,7 +40,7 @@ def do_dropped_path(path):
     _savePath = path
     show_msgVar(f"Save path set to: {_savePath}")
     save_savepath(path=_savePath)
-    list_files(path=path)
+    list_files()
 
 def do_dropped_email(dropped_data,path):
     if not path:
@@ -123,14 +123,15 @@ def do_dropped_email(dropped_data,path):
             break
     else:
         setTextWidget("Email not found.")
-    list_files(path=_savePath)
+    list_files()
 
 def drop(event):  # On dnd's drop event
     global _savePath
     global _configFile
     global _textWidget
 
-    data = event.data.strip()
+    data = event.data.strip().replace('{','').replace('}','')
+    print(data)
     if os.path.isdir(data):
         do_dropped_path(path=data)
     else:
@@ -139,25 +140,26 @@ def drop(event):  # On dnd's drop event
         except Exception as e:
             setTextWidget(f"Error: {e}")
 
-def browse_path():
-    path = filedialog.askdirectory()
-    if path:
-        save_savepath(path=path)
-        show_msgVar(f"Save path set to: {path}")
-        list_files(path=path)
+def browse_path() -> None:
+    global _savePath
+    _savePath = filedialog.askdirectory()
+    if _savePath:
+        save_savepath(path=_savePath)
+        show_msgVar(f"Save path set to: {_savePath}")
+        list_files()
     else:
-        path = '.\\'
-    return path
+        _savePath = '.\\'
 
-def list_files(path):
-    if not path:
+def list_files() -> None:
+    global _savePath
+    if not _savePath:
         setTextWidget(str="No save path set.")
         return
     try:
-        files = os.listdir(path)
+        files = os.listdir(_savePath)
         files.insert(0, '..')  # Add parent directory
         file_list = "\n".join(files)
-        setTextWidget(str=f"Files in {path}:\n{file_list}\n")
+        setTextWidget(str=f"Files in {_savePath}:\n{file_list}\n")
     except Exception as e:
         setTextWidget(str=f"Error listing files: {e}\n")
 
@@ -207,7 +209,7 @@ def main():
     _textWidget.register_drop_target("*")
     _textWidget.bind("<<Drop>>", drop)
 
-    list_files(path=_savePath)
+    list_files()
 
     browse_button = ttk.Button(lower_frame, text="Browse", command=browse_path)
     browse_button.pack(pady=10)
