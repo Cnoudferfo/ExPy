@@ -30,7 +30,7 @@ def getPageImg(page, zoom):
     return img
 
 # Save the page
-def save_one_page(filename='', page=None):
+def save_one_page(filename='', page=None) -> int:
     if filename == '' or page == None:
         return -1
     new_pdf = pmpdf.open()
@@ -39,15 +39,13 @@ def save_one_page(filename='', page=None):
     new_pdf.close()
     return 0
 
-def ya_save_one_page(vendor_name, quo_number, title, page):
+def ya_save_one_page(vendor_name, quo_number, title, page, savePath) -> int:
     if page == None:
         return -1
-    if title != '':
-        fpath = f"./test_data/{quo_number}_{vendor_name}_{title}.pdf"
-    else:
-        fpath = f"./test_data/{quo_number}_{vendor_name}_會議記錄.pdf"
-    return save_one_page(filename=fpath, page=page)
-
+    fpath = f"{savePath}\\{quo_number}_{vendor_name}_{title}.pdf"
+    # return save_one_page(filename=fpath, page=page)
+    print(f"fpath={fpath}")
+    return 0
 def openPDF(fn=''):
     pdf = pmpdf.open(filename=fn)
     print(f"openPDF() open : {fn}.")
@@ -311,10 +309,9 @@ def gen_iterateInPdf(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_lo
         ppno = i-1
         page = theDoc.load_page(ppno)
         if reallyToDoPlain==False:
-            debug_msg = f"Do page {i} "
             pp_dic = doMyOnePage(page=page, attr_dic=attr_dic, page_no=i)
             ret_str = process_transaction(page_data=pp_dic)
-            yield f"Page_{i}\n" + ret_str
+            yield f"Page.{i}\n" + ret_str
         else:
             MyU.set_log(dolog=True)
             img = getPageImg(page=page, zoom=2.0)
@@ -369,7 +366,17 @@ def iterateInPdf(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_log=Fa
             ocr_engine.ReadImage(image=img, do_plain=True)
     theDoc.close()
     return 0
-
+def gen_toSaveFiles(pdffn, ppInfoLst, savePath):
+    doc = openPDF(fn=pdffn)
+    for i in range(len(ppInfoLst)):
+        page = doc.load_page(i)
+        ss = ppInfoLst[i].split('\n')
+        qn = ss[1]
+        vn = ss[2]
+        tt = ss[3]
+        ya_save_one_page(vendor_name=vn, quo_number=qn, title=tt, page=page, savePath=savePath)
+        # print(f"to save file i={i},{qn},{vn},{tt}")
+    doc.close()
 def main():
     # Check the argv
     theArgc = len(sys.argv)

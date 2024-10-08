@@ -24,6 +24,9 @@ thePageEdits = {
     'vendor name': None,
     'paper title': None
 }
+theDoOcrButton=None
+theChangePpInfoButton=None
+theSaveFilesButton=None
 
 def createRoot() -> tkdnd.Tk:
     global theConfig
@@ -39,15 +42,20 @@ def createRoot() -> tkdnd.Tk:
     root_height = int(root_width*int(root_aspect.split(':')[1])/int(root_aspect.split(':')[0]))
     root.geometry(f"{root_width}x{root_height}")
     return root
+
+def enableDoOcrButton() -> None:
+    theDoOcrButton.config(state='active')
+
 def createOcrSettingUI(parent) -> ttk.Frame:
     global theConfig
+    global theDoOcrButton
     # Call back function
     def on_clickRadioButton():
         print(f"ocr type={ocrType.get()}")
         for i, key in enumerate(options.keys()):
             options[key]= True if strVars[i].get()=='True' else False
     # Call do_ocr.py.iterateInPdf() when Do OCR button pressed
-    def on_clickButton():
+    def on_doOcr():
         global theFilepath
         global thePpInfoStrs
         global thePpInfoLbls
@@ -123,8 +131,9 @@ def createOcrSettingUI(parent) -> ttk.Frame:
     pages_label = tk.Label(lf_pages, text='null(all)  1,2,3  1-3 ')
     pages_label.pack(pady=10, padx=10, expand=True, fill='both')
     # Create "do ocr" button
-    button_doOcr = tk.Button(fram_rt,text="Do OCR", command=on_clickButton, foreground="black", background="lightblue")
-    button_doOcr.pack(pady=10, padx=10, expand=True, fill='both')
+    theDoOcrButton = tk.Button(fram_rt,text="Do OCR", command=on_doOcr, foreground="black", background="lightblue")
+    theDoOcrButton.pack(pady=10, padx=10, expand=True, fill='both')
+    theDoOcrButton.config(state='disabled')
     return fram_rt
 
 def createPdfDisplayUI(parent) -> ttk.Frame:
@@ -185,9 +194,8 @@ def createPdfDisplayUI(parent) -> ttk.Frame:
             resetPdf()
             thbn_zoom = theConfig.get('gui settings',{})['thumbnail zoom']
             n = show_pdf_images(doc=theDoc, zoom=thbn_zoom)
-            print(f"pdffn={theFilepath}")
-            print(f"doc.page_count={theDoc.page_count}")
-            print(f"{n}-page processed.")
+            enableDoOcrButton()
+            enableSaveFilesButton()
         except Exception as e:
             print(f"drop() Error={e}")
         finally:
@@ -222,12 +230,25 @@ def createPdfDisplayUI(parent) -> ttk.Frame:
 
 def to_updatePageEdit(pp_dic=None) -> None:
     global thePageEdits
+    global theChangePpInfoButton
     for key in thePageEdits.keys():
         thePageEdits[key].set(pp_dic[key])
+    theChangePpInfoButton.config(state='active')
+
 def createPageEditUI(parent) -> ttk.Frame:
     global thePageEdits
-    def on_clickToChange(event):
-        pass
+    global thePpInfoStrs
+    global theChangePpInfoButton
+    def on_clickToChange():
+        pn = thePageEdits['page no']
+        pnlst = pn.get().split('.')
+        ppno = int(pnlst[1])
+        qn = thePageEdits['quotation number'].get()
+        vn = thePageEdits['vendor name'].get()
+        tt = thePageEdits['paper title'].get()
+        ppinfo = f"page.{ppno}\n"+f"{qn}\n"+f"{vn}\n"+f"{tt}"
+        thePpInfoStrs[ppno-1].set(ppinfo)
+
     frm = ttk.Frame(parent, borderwidth=2, relief='solid')
     lbfrm = tk.LabelFrame(frm, text="Page Information:", padx=5, pady=5)
     col_no = 2
@@ -241,13 +262,49 @@ def createPageEditUI(parent) -> ttk.Frame:
     for i, key in enumerate(thePageEdits.keys()):
         thePageEdits[key]=tk.StringVar(value='')
         lbls.append(tk.Label(lbfrm, text=f"{key}"))
-        lbls[i].grid(column=0, row=i, sticky="nsew")
+        lbls[i].grid(column=0, row=i, sticky="nsew", padx=5, pady=5)
         etys.append(tk.Entry(lbfrm, textvariable=thePageEdits[key]))
-        etys[i].grid(column=1, row=i, sticky="ew")
+        etys[i].grid(column=1, row=i, sticky="ew", padx=5, pady=5)
 
-    btn = tk.Button(lbfrm, text="Change it!", command=on_clickToChange, foreground="black", background="pink")
-    btn.grid(column=0, columnspan=2, row=4, sticky="nsew")
+    theChangePpInfoButton = tk.Button(lbfrm, text="Change it!", command=on_clickToChange, foreground="black", background="pink")
+    theChangePpInfoButton.grid(column=0, columnspan=2, row=4, sticky="nsew")
     lbfrm.pack(pady=10, padx=10, expand=True, fill='both')
+    theChangePpInfoButton.config(state='disabled')
+    return frm
+
+def enableSaveFilesButton() -> None:
+    global theSaveFilesButton
+    theSaveFilesButton.config(state='active')
+def createActionsUI(parent) -> ttk.Frame:
+    global theSaveFilesButton
+
+    sp_strvar = tk.StringVar(value=os.path.dirname(os.path.abspath(__file__)))
+    def on_saveFiles() -> None:
+        global theFilepath
+        global thePpInfoStrs
+        retlst=[]
+        # Go through all pages and make a list pf all page information
+        for strvar in thePpInfoStrs:
+            retlst.append(strvar.get())
+        Doo.gen_toSaveFiles(pdffn=theFilepath, ppInfoLst=retlst, savePath=sp_strvar.get())
+    def on_drop(event):
+        if os.path.isdir(event.data):
+            sp_strvar.set(event.data)
+        else:
+            sp_strvar.set("Error! Dropped object not a path.")
+    frm = ttk.Frame(parent, borderwidth=2, relief='solid')
+    lbfrm = ttk.LabelFrame(frm, text="Actions:")
+    sp_lbfrm = ttk.LabelFrame(lbfrm, text="Save path:")
+    sp_lbl = tk.Label(sp_lbfrm, textvariable=sp_strvar)
+    sp_lbfrm.pack(fill='both', padx=10, pady=10)
+    sp_lbl.pack()
+    sp_lbl.register_drop_target("*")
+    sp_lbl.bind("<<Drop>>", on_drop)
+
+    theSaveFilesButton = ttk.Button(lbfrm, text="Save files!", command=on_saveFiles)
+    theSaveFilesButton.pack()
+    lbfrm.pack(fill='both', padx=10, pady=10)
+    theSaveFilesButton.config(state='disabled')
     return frm
 
 def main() -> None:
@@ -259,9 +316,11 @@ def main() -> None:
     fm1 = createOcrSettingUI(parent=theRoot)
     fm1.grid(column=1, row=0, sticky="nsew")
     fm2 = createPdfDisplayUI(parent=theRoot)
-    fm2.grid(column=0, row=0, rowspan=2, sticky="nsew")
+    fm2.grid(column=0, row=0, rowspan=3, sticky="nsew")
     fm3 = createPageEditUI(parent=theRoot)
     fm3.grid(column=1, row=1, sticky="nsew")
+    fm4 = createActionsUI(parent=theRoot)
+    fm4.grid(column=1, row=2, sticky="nsew")
     theRoot.mainloop()
 
 if __name__ == "__main__":

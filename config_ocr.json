@@ -35,9 +35,10 @@
     },
     "gui settings": {
         "root aspect": "4:3",
-        "root width": 800,
+        "root width": 1200,
         "thumbnail zoom": 0.25
     },
+    "save path": "c:\\users\\c910050\\Expy\\test_data",
     "a transaction": [
         {
             "vendor name": "",
