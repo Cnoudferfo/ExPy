@@ -11,6 +11,7 @@ import tkinterDnD as tkdnd
 import pymupdf as fitz
 from PIL import Image, ImageTk
 import re
+import threading as th
 
 # Globale variables
 theConfig = None
@@ -46,6 +47,24 @@ def createRoot() -> tkdnd.Tk:
 def enableDoOcrButton() -> None:
     theDoOcrButton.config(state='active')
 
+def proc_ocr(ocr_args):
+    r = Doo.gen_iterateInPdf(pdffn=ocr_args['pdf path'],\
+                             ocr_type=ocr_args['ocr_type'],\
+                             batch=ocr_args['batch'],\
+                             do_log=ocr_args['do_log'],\
+                             do_plain=ocr_args['do_plain'])
+    i = 0
+    while True:
+        p = next(r)
+        if not p:
+            break
+        else:
+            thePpInfoStrs[i].set(value=p)
+            thePpImgLbls[i].update()
+        i += 1
+        if i > 1000:
+            break
+
 def createOcrSettingUI(parent) -> ttk.Frame:
     global theConfig
     global theDoOcrButton
@@ -76,29 +95,18 @@ def createOcrSettingUI(parent) -> ttk.Frame:
                 batch_list = list(range(int(the_list[0]), (int(the_list[1])+1)))
             else:
                 batch_list = [int(c) for c in the_list]
-        try:
-            # Call Do_ocr.py's iterateInPdf() generatorversion
-            r = Doo.gen_iterateInPdf(pdffn=theFilepath,\
-                                      ocr_type=ocrType.get(),\
-                                      batch=batch_list,\
-                                      do_log=options['log'],\
-                                      do_plain=options['plain'])
-            # Receive all the page information
-            i = 0
-            while True:
-                p = next(r)
-                if not p:
-                    break
-                else:
-                    print(f"p={p}")
-                    thePpInfoStrs[i].set(value=p)
-                    thePpInfoLbls[i].update()
-                i += 1
-                # Just in case
-                if i > 1000:
-                    break
-        except Exception as e:
-            print(f"Exception={e}")
+
+        ocr_args = {
+            'pdf path': theFilepath,
+            'ocr_type': ocrType.get(),
+            'batch': batch_list,
+            'do_log': options['log'],
+            'do_plain': options['plain']
+        }
+
+        thid = th.Thread(target=lambda: proc_ocr(ocr_args=ocr_args))
+        thid.start()
+
     # ocr settings
     ocr_stts = theConfig.get('ocr settings',{})
     # Create message frame
