@@ -46,6 +46,8 @@ def createRoot() -> tkdnd.Tk:
 
 def enableDoOcrButton() -> None:
     theDoOcrButton.config(state='active')
+def disableDoOcrButtin() -> None:
+    theDoOcrButton.config(state='disabled')
 
 def proc_ocr(ocr_args):
     r = Doo.gen_iterateInPdf(pdffn=ocr_args['pdf path'],\

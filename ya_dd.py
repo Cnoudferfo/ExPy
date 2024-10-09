@@ -75,9 +75,12 @@ def do_dropped_email(dropped_data,path):
         return h*3600 + m*60 + s
 
     def str_similarity(str1, str2):
-        str1 = str1 + ' '*(len(str2) - len(str1))
-        str2 = str2 + ' '*(len(str1) - len(str2))
-        return sum(1 if i == j else 0 for i, j in zip(str1, str2)) / float(len(str1))
+        if not str1 and not str2:
+            return 1.0
+        else:
+            str1 = str1 + ' '*(len(str2) - len(str1))
+            str2 = str2 + ' '*(len(str1) - len(str2))
+            return sum(1 if i == j else 0 for i, j in zip(str1, str2)) / float(len(str1))
 
     i = 0
     for msg in messages:  # Find the email based on the extracted properties
