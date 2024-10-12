@@ -12,10 +12,12 @@ import pymupdf as fitz
 from PIL import Image, ImageTk
 import re
 import threading as th
+import time as tm
 
 # Globale variables
 theConfig = None
 theFilepath = ''
+thePageNumber = 0
 thePpInfoStrs=[]  # page infos: a list to store all pages' information of drooped pdf
 thePpImgLbls=[]   # images
 thePpInfoLbls=[]  # page numbers
@@ -49,23 +51,63 @@ def enableDoOcrButton() -> None:
 def disableDoOcrButtin() -> None:
     theDoOcrButton.config(state='disabled')
 
-def proc_ocr(ocr_args):
-    r = Doo.gen_iterateInPdf(pdffn=ocr_args['pdf path'],\
-                             ocr_type=ocr_args['ocr_type'],\
-                             batch=ocr_args['batch'],\
-                             do_log=ocr_args['do_log'],\
-                             do_plain=ocr_args['do_plain'])
-    i = 0
-    while True:
-        p = next(r)
-        if not p:
-            break
-        else:
-            thePpInfoStrs[i].set(value=p)
-            thePpImgLbls[i].update()
-        i += 1
-        if i > 1000:
-            break
+class ui_progressbar(ttk.Progressbar):
+    def __init__(self, parent, ori, lnth, md, max):
+        super().__init__(master=parent, orient=ori, length=lnth, mode=md, maximum=max)
+
+class ui_popup(tk.Toplevel):
+    def __init__(self, parent, ocr_args):
+        super().__init__(parent, border=1, borderwidth=2)
+        x = parent.winfo_rootx()
+        y = parent.winfo_rooty()
+        self.geometry(f"300x200+{x+50}+{y+50}")
+        self.protocol("WM_DELETE_WINDOW", self.on_closeWindow)
+        self.frame = tk.Frame(self, border=1, borderwidth=10, padx=5, pady=5)
+        self.frame.pack(fill='both', expand=True)
+        self.progbar=ui_progressbar(self.frame, ori="horizontal", lnth=100, md='determinate', max=ocr_args['num of pages'])
+        self.progbar.pack(expand=True, fill='x', pady=10)
+        self.strVar = tk.StringVar(self.frame, value=f"Progress: 0/{self.progbar.cget(key='maximum')}")
+        self.lbl = tk.Label(self.frame, textvariable=self.strVar)
+        self.lbl.pack(fill='both', expand=True, padx=10, pady=10)
+        self.btn = tk.Button(self.frame,text="Abort", command=self.to_stop_t)
+        self.btn.pack()
+        self.the_t = th.Thread(target=lambda: self.proc_ocr(ocr_args))
+        self.let_t_go = True
+        self.the_t.start()
+
+    def proc_ocr(self, ocr_args):
+        r = Doo.gen_iterateInPdf(pdffn=ocr_args['pdf path'],\
+                                ocr_type=ocr_args['ocr_type'],\
+                                batch=ocr_args['batch'],\
+                                do_log=ocr_args['do_log'],\
+                                do_plain=ocr_args['do_plain'])
+        i = 0
+        num_of_pages = self.progbar.cget(key='maximum')
+        while True:
+            p = next(r)
+            if not p:
+                break
+            else:
+                thePpInfoStrs[i].set(value=p)
+                thePpImgLbls[i].update()
+                self.progbar.config(value=i+1)
+                self.strVar.set(value=f"Progress: {i+1}/{num_of_pages}")
+                self.update()
+            i += 1
+            if i > 1000:
+                break
+            if not self.let_t_go:
+                self.strVar.set(value="Abort, breaking...")
+                break
+        self.strVar.set(value="Finished.")
+        tm.sleep(1)
+        self.destroy()
+
+    def to_stop_t(self):
+        self.let_t_go = False
+
+    def on_closeWindow(self):
+        self.to_stop_t()
 
 def createOcrSettingUI(parent) -> ttk.Frame:
     global theConfig
@@ -80,10 +122,11 @@ def createOcrSettingUI(parent) -> ttk.Frame:
         global theFilepath
         global thePpInfoStrs
         global thePpInfoLbls
+        global thePageNumber
         pps = pages.get().replace(' ','')
         if not pps:
-            print(f"Empty pages, set batch to None.")
-            batch_list=None
+            batch_list=list(range(1,(thePageNumber+1)))
+            print(f"Do all pages")
         else:
             print(f"pps={pps}")
             punc = re.findall(r'[^\w\w]', pps)
@@ -103,11 +146,12 @@ def createOcrSettingUI(parent) -> ttk.Frame:
             'ocr_type': ocrType.get(),
             'batch': batch_list,
             'do_log': options['log'],
-            'do_plain': options['plain']
+            'do_plain': options['plain'],
+            'num of pages': len(batch_list)
         }
-
-        thid = th.Thread(target=lambda: proc_ocr(ocr_args=ocr_args))
-        thid.start()
+        # DO OCR!
+        pop = ui_popup(parent=parent, ocr_args=ocr_args)
+        print(f"{pop}")
 
     # ocr settings
     ocr_stts = theConfig.get('ocr settings',{})
@@ -198,9 +242,11 @@ def createPdfDisplayUI(parent) -> ttk.Frame:
             thePageEdits[key].set('')
     def on_drop(event):
         global theFilepath
+        global thePageNumber
         try:
             theFilepath = event.data
             theDoc = fitz.open(theFilepath)
+            thePageNumber = theDoc.page_count
             resetPdf()
             thbn_zoom = theConfig.get('gui settings',{})['thumbnail zoom']
             n = show_pdf_images(doc=theDoc, zoom=thbn_zoom)
