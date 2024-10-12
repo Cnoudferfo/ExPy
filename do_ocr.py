@@ -145,7 +145,9 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
         # while ccw_degree <= 270:
         for ccw_degree in ccw_list:
             # Do OCR
-            page_conf, str = ocr_engine.ReadImage(image=pp_img, ccw=ccw_degree, zoom=zoomAtCv2)
+            page_conf, str = ocr_engine.ReadImage(image=pp_img,\
+                                                  ccw=ccw_degree,\
+                                                  zoom=zoomAtCv2)
             page_text = MyU.remove_punctuation(MyU.remove_all_whitespaces(s=str))
             if ocr_type == 'easyocr':
                 page_conf *= 100
@@ -171,7 +173,9 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
                         ss, pos_st = testTokenInPage(tok=token, ppStr=page_text)
                         # String similarity is large enough to cut the token from page string
                         if ss > 0.9:
-                            page_text = cutPage(ppStr=page_text, pos_start=pos_st, cutLen=len(token))
+                            page_text = cutPage(ppStr=page_text,\
+                                                pos_start=pos_st,\
+                                                cutLen=len(token))
                         # HIT CONDITION
                         #   TODO : hard coding threashold
                         if ss > 0.65:
@@ -194,7 +198,9 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
                             pos_e = pos_s+len(token)+10
                             qnStr = page_text[pos_s:pos_e]
                             qnInPage = MyU.ya_extract_qn(text=qnStr, yy="24")
-                            page_text = cutPage(ppStr=page_text, pos_start=pos_s, cutLen=(pos_e-pos_s+1))
+                            page_text = cutPage(ppStr=page_text,\
+                                                pos_start=pos_s,\
+                                                cutLen=(pos_e-pos_s+1))
                             if ss > resultBuffer[key]['ss']:
                                 resultBuffer[key]['ss'] = ss
                                 resultBuffer[key]['text'] = qnInPage
@@ -317,6 +323,7 @@ def gen_iterateInPdf(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_lo
             img = getPageImg(page=page, zoom=2.0)
             ocr_engine.ReadImage(image=img, do_plain=True)
     theDoc.close()
+    # End this processing
     yield ''
 
 # To iterate in a pdf file called from command line
@@ -374,7 +381,11 @@ def gen_toSaveFiles(pdffn, ppInfoLst, savePath):
         qn = ss[1]
         vn = ss[2]
         tt = ss[3]
-        ya_save_one_page(vendor_name=vn, quo_number=qn, title=tt, page=page, savePath=savePath)
+        ya_save_one_page(vendor_name=vn,\
+                         quo_number=qn,\
+                         title=tt,\
+                         page=page,\
+                         savePath=savePath)
         # print(f"to save file i={i},{qn},{vn},{tt}")
     doc.close()
 def main():

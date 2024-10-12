@@ -151,7 +151,6 @@ class UI_ocrSetting(ttk.Frame):
         if 'disableDoOcrBtn' in msg['command']:
             self.doOcrBtn.config(state='disabled')
 
-
 class ui_progressbar(ttk.Progressbar):
     def __init__(self, parent, ori, lnth, md, max):
         super().__init__(master=parent, orient=ori, length=lnth, mode=md, maximum=max)
@@ -196,18 +195,21 @@ class ui_popup(tk.Toplevel):
         while True:
             # Get ocr result sequentially page by page
             p = next(r)
-            # Null string means ocr finished
+            # Null (or None) means ocr finished
             if not p:
                 break
             else:
+                pno = int(p.split('\n')[0].split('.')[1])
                 self.master.callback({'command': 'setPageInfoStrs',\
-                                      'index': i, 'value': p})
+                                      'index': (pno-1), 'value': p})
                 self.progbar.config(value=i+1)
                 self.strVar.set(value=f"Progress: {i+1}/{num_of_pages}")
                 self.update()
             i += 1
+            # Just in case
             if i > 1000:
                 break
+            # Aborted from UI
             if not self.let_t_go:
                 self.strVar.set(value="Abort, breaking...")
                 break
