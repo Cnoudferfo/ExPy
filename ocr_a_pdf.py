@@ -11,7 +11,6 @@ from PIL import Image, ImageTk
 import re
 import threading as th
 import time as tm
-
 # App root window
 class UI_app(tkdnd.Tk):
     pdfPath = ''
@@ -57,7 +56,6 @@ class UI_app(tkdnd.Tk):
         self.pn2.on_parentCall(command)
         self.pn3.on_parentCall(command)
         self.pn4.on_parentCall(command)
-
 # CREATE OCR SETTINGS PANEL
 class UI_ocrSetting(ttk.Frame):
     def __init__(self, parent):
@@ -110,11 +108,9 @@ class UI_ocrSetting(ttk.Frame):
                                    background="lightblue")
         self.doOcrBtn.pack(pady=10, padx=10, expand=True, fill='both')
         self.doOcrBtn.config(state='disabled')
-
     def on_clickRadioButton(self):
         for i, key in enumerate(self.options.keys()):
             self.options[key]= True if self.strVars[i].get()=='True' else False
-
     # Call do_ocr.py.iterateInPdf() when Do OCR button pressed
     def on_doOcr(self):
         pps = self.pages.get().replace(' ','')
@@ -134,7 +130,6 @@ class UI_ocrSetting(ttk.Frame):
                 batch_list = list(range(int(the_list[0]), (int(the_list[1])+1)))
             else:
                 batch_list = [int(c) for c in the_list]
-
         ocr_args = {
             'pdf path': self.master.pdfPath,
             'ocr_type': self.ocrType.get(),
@@ -145,16 +140,12 @@ class UI_ocrSetting(ttk.Frame):
         }
         # DO OCR!
         pop = ui_popup(parent=self.master, ocr_args=ocr_args)
+    # To process dispatched call from parent
     def on_parentCall(self, msg: dict):
         if 'enableDoOcrBtn' in msg['command']:
             self.doOcrBtn.config(state='active')
         if 'disableDoOcrBtn' in msg['command']:
             self.doOcrBtn.config(state='disabled')
-
-class ui_progressbar(ttk.Progressbar):
-    def __init__(self, parent, ori, lnth, md, max):
-        super().__init__(master=parent, orient=ori, length=lnth, mode=md, maximum=max)
-
 class ui_popup(tk.Toplevel):
     def __init__(self, parent, ocr_args):
         super().__init__(parent, border=1, borderwidth=2)
@@ -164,11 +155,11 @@ class ui_popup(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self.on_closeWindow)
         self.frame = tk.Frame(self, border=1, borderwidth=10, padx=5, pady=5)
         self.frame.pack(fill='both', expand=True)
-        self.progbar=ui_progressbar(self.frame,\
-                                    ori="horizontal",\
-                                    lnth=100,\
-                                    md='determinate',\
-                                    max=ocr_args['num of pages']\
+        self.progbar=ttk.Progressbar(self.frame,\
+                                    orient="horizontal",\
+                                    length=100,\
+                                    mode='determinate',\
+                                    maximum=ocr_args['num of pages']\
                                     )
         self.progbar.pack(expand=True, fill='x', pady=10)
         self.strVar = tk.StringVar(self.frame,\
@@ -181,8 +172,8 @@ class ui_popup(tk.Toplevel):
         self.the_t = th.Thread(target=lambda: self.proc_ocr(ocr_args))
         self.let_t_go = True
         self.the_t.start()
-
     def proc_ocr(self, ocr_args):
+        self.master.callback({'command': 'disableDoOcrBtn'})
         # Call generator coroutine at Doo
         r = Doo.gen_iterateInPdf(pdffn=ocr_args['pdf path'],\
                                 ocr_type=ocr_args['ocr_type'],\
@@ -214,14 +205,17 @@ class ui_popup(tk.Toplevel):
                 self.strVar.set(value="Abort, breaking...")
                 break
         self.strVar.set(value="Finished.")
+        self.master.callback({'command': 'enableDoOcrBtn'})
+        self.master.callback({'command': 'listPageInfoStrs', 'rx': self.rx_proc})
         tm.sleep(1)
         self.destroy()
-
     def to_stop_t(self):
         self.let_t_go = False
-
     def on_closeWindow(self):
         self.to_stop_t()
+    def rx_proc(self, strs: list):
+        for s in strs:
+            print(f"\trx_proc() at popup panel s={s}")
 
 # CREATE PDF PREVIEW PANEL
 class UI_pdfPreview(ttk.Frame):
@@ -247,7 +241,6 @@ class UI_pdfPreview(ttk.Frame):
         self.pageInfoLbls=[]  # preview attr labels
         self.pageImgLbls=[]   # preview image labels
         self.pageInfoStrs=[]  # page info stringVars
-
     def make_labels(self, img=None, ppno=0):
         ppno_lbl = tk.Label(self.fram_scrbar)
         img_tk = ImageTk.PhotoImage(img)
@@ -299,8 +292,8 @@ class UI_pdfPreview(ttk.Frame):
             n = self.show_pdf_images(doc=theDoc, zoom=thbn_zoom)
             # enableDoOcrButton()
             # enableSaveFilesButton()
-            self.master.callback({'command': 'enableDoOcrBtn', 'arg': None})
-            self.master.callback({'command': 'enableSaveFilesBtn', 'arg': None})
+            self.master.callback({'command': 'enableDoOcrBtn'})
+            self.master.callback({'command': 'enableSaveFilesBtn'})
         except Exception as e:
             print(f"drop() Error={e}")
         finally:
@@ -316,7 +309,7 @@ class UI_pdfPreview(ttk.Frame):
             dic[key] = ls[i]
         # to_updatePageEdit(pp_dic=dic)
         self.master.callback({'command': 'updatePageEdit', 'arg': dic})
-
+    # To process dispatched call from parent
     def on_parentCall(self, msg: dict):
         if 'setPageInfoStrs' in msg['command']:
             index = msg['index']
@@ -325,6 +318,17 @@ class UI_pdfPreview(ttk.Frame):
         if 'getPageInfoStrs' in msg['command']:
             proc = msg['rx']
             proc(self.pageInfoStrs)
+        if 'listPageInfoStrs' in msg['command']:
+            proc = msg['rx']
+            proc(self.toListPageInfoStrs())
+        if 'packPageInfoStrs' in msg['command']:
+            self.toPackPageInfoStrs(msg['list'])
+    def toListPageInfoStrs(self) -> list:
+        return [sv.get() for sv in self.pageInfoStrs]
+    def toPackPageInfoStrs(self, strs: list) -> None:
+        for i, s in enumerate(strs):
+            self.pageInfoStrs[i].set(s)
+
 
 # CREATE PAGE EDIT PANEL
 class UI_pageEdit(ttk.Frame):
@@ -374,7 +378,7 @@ class UI_pageEdit(ttk.Frame):
         for key in self.master.pageAttrs.keys():
             self.master.pageAttrs[key].set(pp_dic[key])
         self.changePpInfoBtn.config(state='active')
-
+    # To process dispatched call from parent
     def on_parentCall(self, msg: str):
         if 'updatePageEdit' in msg['command']:
             self.to_updatePageEdit(pp_dic=msg['arg'])
@@ -417,7 +421,7 @@ class UI_actions(ttk.Frame):
             self.savePath.set(event.data)
         else:
             self.savePath.set("Error! Dropped object not a path.")
-
+    # To process dispatched call from parent
     def on_parentCall(self, msg: str):
         if 'enableSaveFilesBtn' in msg['command']:
             self.saveFilesBtn.config(state='active')

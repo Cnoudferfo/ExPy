@@ -110,7 +110,8 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
         'title': '',
         'vendor name': '',
         'quotation number': '',
-        'page conf': 0
+        'page conf': 0,
+        'ccw degree': 360
     }
     # Yet another result
     resultBuffer = {
@@ -141,8 +142,6 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
         ccw_list = [90, 0, 270]  # for Easy OCR
 
     for zoomAtCv2 in zoomList:
-        # ccw_degree = 0
-        # while ccw_degree <= 270:
         for ccw_degree in ccw_list:
             # Do OCR
             page_conf, str = ocr_engine.ReadImage(image=pp_img,\
@@ -151,9 +150,6 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
             page_text = MyU.remove_punctuation(MyU.remove_all_whitespaces(s=str))
             if ocr_type == 'easyocr':
                 page_conf *= 100
-            # # Update page confidence value
-            # if page_conf > result_dic['page conf']:
-            #     result_dic['page conf'] = page_conf
 
             # DEBUG
             MyU.log_text(f"pp.{page_no},conf={page_conf},zm={zoomAtCv2},ccw={ccw_degree},pptxt={page_text}")
@@ -207,12 +203,18 @@ def doMyOnePage(page=None, attr_dic=None, page_no=0):
             # To escape rotate trial
             if ocr_type=='easyocr' and resultBuffer['title']['text'] in EscapeTitles:
                 break
+            if ocr_type=='easyocr' and\
+                    resultBuffer['title']['text'] and\
+                    resultBuffer['quotation number']['text'] and\
+                    resultBuffer['vendor name']['text']:
+                break
         # To escape zoom trial
         if ocr_type=='tess' and resultBuffer['title']['text'] in EscapeTitles:
             break
     result_dic['title'] = resultBuffer['title']['text']
     result_dic['vendor name'] = resultBuffer['vendor name']['text']
     result_dic['quotation number'] = resultBuffer['quotation number']['text']
+    result_dic['ccw degree'] = ccw_degree
     return result_dic
 
 # Define a transaction
@@ -270,8 +272,10 @@ def process_transaction(page_data) -> str:
     if callFromUI == True:
         s1 = f"{page_data['quotation number']}\n"
         s2 = f"{page_data['vendor name']}\n"
-        s3 = f"{page_data['title']}"
-        return s1+s2+s3
+        s3 = f"{page_data['title']}\n"
+        s4 = f"{page_data['ccw degree']}\n"
+        s5 = f"{page_data['page conf']:.2f}"
+        return s1+s2+s3+s4+s5
     else:
         return f"{page_data['quotation number']}_{page_data['vendor name']}_{page_data['title']}.pdf"
 
@@ -302,7 +306,7 @@ def gen_iterateInPdf(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_lo
 
     ocr_engine.Init()
 
-    if batch == None:
+    if batch == None or len(batch)==0:
         batch = list(range(1, theDoc.page_count+1))
         MyU.set_log(dolog=False)
         reallyToDoPlain = False
@@ -325,54 +329,6 @@ def gen_iterateInPdf(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_lo
     theDoc.close()
     # End this processing
     yield ''
-
-# To iterate in a pdf file called from command line
-def iterateInPdf(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_log=False, batch=None)->int:
-    global ocr_engine
-
-    # Load config_ocr.json
-    attr_dic = MyU.loadPageAttrFromJson()
-
-    if not os.path.isfile(pdffn) or 'pdf' not in pdffn:
-        raise Exception(f"Wrong! {pdffn} NOT exists or NOT a pdf file!")
-    theDoc = openPDF(fn=pdffn)
-    if theDoc==None:
-        raise Exception(f"FATAL ERROR! failed in open {pdffn}")
-
-    if ocr_command:
-        ocr_command()
-    elif ocr_type=='use_easy':
-        use_easyocr()
-    elif ocr_type=='use_tess':
-        use_tess()
-    else:
-        raise Exception(f"Unknown ocr type:{ocr_type}")
-
-    ocr_engine.Init()
-
-    if batch == None:
-        batch = list(range(1, theDoc.page_count+1))
-        MyU.set_log(dolog=False)
-        reallyToDoPlain = False
-    else:
-        MyU.set_log(dolog=do_log)
-        reallyToDoPlain = do_plain
-
-    # Loop in all pages in pdf
-    for i in batch:
-        ppno = i-1
-        page = theDoc.load_page(ppno)
-        if reallyToDoPlain==False:
-            debug_msg = f"Do page {i} "
-            pp_dic = doMyOnePage(page=page, attr_dic=attr_dic, page_no=i)
-            ret_str = process_transaction(page_data=pp_dic)
-            print(f"{debug_msg}conf={pp_dic['page conf']:2.2f},filepath={ret_str}")
-        else:
-            MyU.set_log(dolog=True)
-            img = getPageImg(page=page, zoom=2.0)
-            ocr_engine.ReadImage(image=img, do_plain=True)
-    theDoc.close()
-    return 0
 def gen_toSaveFiles(pdffn, ppInfoLst, savePath):
     doc = openPDF(fn=pdffn)
     for i in range(len(ppInfoLst)):
@@ -388,6 +344,9 @@ def gen_toSaveFiles(pdffn, ppInfoLst, savePath):
                          savePath=savePath)
         # print(f"to save file i={i},{qn},{vn},{tt}")
     doc.close()
+def checkPageInfosAgain(strs: list) -> list:
+
+    return None
 def main():
     # Check the argv
     theArgc = len(sys.argv)
@@ -454,8 +413,25 @@ def main():
         else:
             batch_list=[int(c) for c in the_list]
     # To OCR a pdf
-    iterateInPdf(pdffn=sys.argv[1], ocr_command=useWhichOcr[sys.argv[2]], do_plain=flags['plain'], do_log=flags['log'], batch=batch_list)
-
+    r = gen_iterateInPdf(pdffn=sys.argv[1],\
+                        ocr_type=sys.argv[2],\
+                        batch=batch_list,\
+                        do_log=flags['log'],\
+                        do_plain=flags['plain'])
+    # Initialize page index (counting from zero)
+    i = 0
+    while True:
+        # Get ocr result sequentially page by page
+        p = next(r)
+        # Null (or None) means ocr finished
+        if not p:
+            break
+        else:
+            print(f"{p}")
+        i += 1
+        # Just in case
+        if i > 1000:
+            break
     return 0
 
 if __name__ == "__main__":
