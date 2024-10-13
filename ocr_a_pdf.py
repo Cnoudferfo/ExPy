@@ -205,7 +205,6 @@ class ui_popup(tk.Toplevel):
                 self.strVar.set(value="Abort, breaking...")
                 break
         self.strVar.set(value="Finished.")
-        self.master.callback({'command': 'enableDoOcrBtn'})
         self.master.callback({'command': 'listPageInfoStrs', 'rx': self.rx_proc})
         tm.sleep(1)
         self.destroy()
@@ -214,8 +213,9 @@ class ui_popup(tk.Toplevel):
     def on_closeWindow(self):
         self.to_stop_t()
     def rx_proc(self, strs: list):
-        for s in strs:
-            print(f"\trx_proc() at popup panel s={s}")
+        rLst = Doo.postProcessPageInfos(strs=strs)
+        self.master.callback({'command': 'packPageInfoStrs', 'list': rLst})
+        self.master.callback({'command': 'enableSaveFilesBtn'})
 
 # CREATE PDF PREVIEW PANEL
 class UI_pdfPreview(ttk.Frame):
@@ -293,7 +293,6 @@ class UI_pdfPreview(ttk.Frame):
             # enableDoOcrButton()
             # enableSaveFilesButton()
             self.master.callback({'command': 'enableDoOcrBtn'})
-            self.master.callback({'command': 'enableSaveFilesBtn'})
         except Exception as e:
             print(f"drop() Error={e}")
         finally:
@@ -313,8 +312,16 @@ class UI_pdfPreview(ttk.Frame):
     def on_parentCall(self, msg: dict):
         if 'setPageInfoStrs' in msg['command']:
             index = msg['index']
-            value = msg['value']
-            self.pageInfoStrs[index].set(value=value)
+            edit_value = msg['value']
+            origin_value = self.pageInfoStrs[index].get()
+            edit_ss = edit_value.split('\n')
+            origin_ss = origin_value.split('\n')
+            edit_len = len(edit_ss)
+            origin_len = len(origin_ss)
+            if edit_len < origin_len:
+                for i in range(edit_len, origin_len):
+                    edit_value += f"\n{origin_ss[i]}"
+            self.pageInfoStrs[index].set(value=edit_value)
         if 'getPageInfoStrs' in msg['command']:
             proc = msg['rx']
             proc(self.pageInfoStrs)
@@ -328,8 +335,6 @@ class UI_pdfPreview(ttk.Frame):
     def toPackPageInfoStrs(self, strs: list) -> None:
         for i, s in enumerate(strs):
             self.pageInfoStrs[i].set(s)
-
-
 # CREATE PAGE EDIT PANEL
 class UI_pageEdit(ttk.Frame):
     def __init__(self, parent):
@@ -361,7 +366,6 @@ class UI_pageEdit(ttk.Frame):
         self.changePpInfoBtn.grid(column=0, columnspan=2, row=4, sticky="nsew")
         self.lbfrm.pack(pady=10, padx=10, expand=True, fill='both')
         self.changePpInfoBtn.config(state='disabled')
-
     def on_clickToChange(self):
         pn = self.master.pageAttrs['page no']
         pnlst = pn.get().split('.')
@@ -382,7 +386,6 @@ class UI_pageEdit(ttk.Frame):
     def on_parentCall(self, msg: str):
         if 'updatePageEdit' in msg['command']:
             self.to_updatePageEdit(pp_dic=msg['arg'])
-
 # CREATE ACTIONS PANEL
 class UI_actions(ttk.Frame):
     def __init__(self, parent):
@@ -395,14 +398,12 @@ class UI_actions(ttk.Frame):
         sp_lbl.pack()
         sp_lbl.register_drop_target("*")
         sp_lbl.bind("<<Drop>>", self.on_drop)
-
         self.saveFilesBtn = ttk.Button(lbfrm,\
                                        text="Save files!",\
                                        command=self.on_saveFiles)
         self.saveFilesBtn.pack()
         lbfrm.pack(fill='both', padx=10, pady=10)
         self.saveFilesBtn.config(state='disabled')
-
     def on_saveFiles(self):
         # Callback function to receive pageInfoStrs and iterate it
         def rx_proc(v: list):
@@ -415,7 +416,6 @@ class UI_actions(ttk.Frame):
                                 savePath=self.savePath.get())
         # Get page info strs from pdfPreview panel
         self.master.callback({'command': 'getPageInfoStrs', 'rx': rx_proc})
-
     def on_drop(self, event):
         if os.path.isdir(event.data):
             self.savePath.set(event.data)

@@ -8,7 +8,6 @@ import re
 
 ocr_engine = None
 ocr_type = 'tess'
-callFromUI = False
 
 def use_tess():
     global ocr_engine
@@ -30,27 +29,31 @@ def getPageImg(page, zoom):
     return img
 
 # Save the page
-def save_one_page(filename='', page=None) -> int:
+def save_one_page(filename='', page=None, rotate=0) -> int:
     if filename == '' or page == None:
         return -1
     new_pdf = pmpdf.open()
-    new_pdf.insert_pdf(page.parent, from_page=page.number, to_page=page.number)
+    new_pdf.insert_pdf(page.parent, from_page=page.number, to_page=page.number, rotate=rotate)
     new_pdf.save(filename)
     new_pdf.close()
     return 0
-
-def ya_save_one_page(vendor_name, quo_number, title, page, savePath) -> int:
+def ya_save_one_page(vendor_name, quo_number, title, page, savePath, ccw=0, group_idx='') -> int:
     if page == None:
         return -1
-    fpath = f"{savePath}\\{quo_number}_{vendor_name}_{title}.pdf"
-    # return save_one_page(filename=fpath, page=page)
+    fpath = f"{savePath}\\Qn{quo_number}_No{group_idx}_{vendor_name}_{title}.pdf"
     print(f"fpath={fpath}")
-    return 0
+    cw = 0
+    if ccw==90:
+        cw = 270
+    elif ccw==270:
+        cw = 90
+    else:
+        pass
+    return save_one_page(filename=fpath, page=page, rotate=cw)
 def openPDF(fn=''):
     pdf = pmpdf.open(filename=fn)
     print(f"openPDF() open : {fn}.")
     return pdf
-
 def saveMyOnePage(index=0,page=None):
     if (index % 4) == 2 or (index % 4) == 3:
         cw = 90
@@ -59,7 +62,6 @@ def saveMyOnePage(index=0,page=None):
     page.set_rotation(cw)
     fn = f".\\test_data\\page_{index}.pdf"
     return save_one_page(filename=fn, page=page)
-
 def testTokenInPage(tok='', ppStr=''):
     ss = 0
     pageLen = len(ppStr)
@@ -237,7 +239,6 @@ transaction = {
 }
 
 def process_transaction(page_data) -> str:
-    global callFromUI
     MyU.log_text(f"transaction={transaction}")
     # An un-ocrable page came in
     if page_data['page conf'] == 0:
@@ -269,22 +270,16 @@ def process_transaction(page_data) -> str:
         if page_data['title']:
             if page_data['title'] in transaction['titles to have'].keys():
                 transaction['titles to have'][page_data['title']] = True
-    if callFromUI == True:
-        s1 = f"{page_data['quotation number']}\n"
-        s2 = f"{page_data['vendor name']}\n"
-        s3 = f"{page_data['title']}\n"
-        s4 = f"{page_data['ccw degree']}\n"
-        s5 = f"{page_data['page conf']:.2f}"
-        return s1+s2+s3+s4+s5
-    else:
-        return f"{page_data['quotation number']}_{page_data['vendor name']}_{page_data['title']}.pdf"
+    s1 = f"{page_data['quotation number']}\n"
+    s2 = f"{page_data['vendor name']}\n"
+    s3 = f"{page_data['title']}\n"
+    s4 = f"{page_data['ccw degree']}\n"
+    s5 = f"{page_data['page conf']:.2f}"
+    return s1+s2+s3+s4+s5
 
-# To iterate in a pdf file, called from UI
+# To iterate in a pdf file, generator co-routine
 def gen_iterateInPdf(pdffn, ocr_command=None, ocr_type='', do_plain=False, do_log=False, batch=None):
     global ocr_engine
-    global callFromUI
-
-    callFromUI = True
 
     # Load config_ocr.json
     attr_dic = MyU.loadPageAttrFromJson()
@@ -334,19 +329,90 @@ def gen_toSaveFiles(pdffn, ppInfoLst, savePath):
     for i in range(len(ppInfoLst)):
         page = doc.load_page(i)
         ss = ppInfoLst[i].split('\n')
-        qn = ss[1]
-        vn = ss[2]
-        tt = ss[3]
+        qn = ss[1]  # Quotation no
+        vn = ss[2]  # Vendor name
+        tt = ss[3]  # Paper title
+        ccw = 0
+        group_idx = '0'
+        if len(ss) > 4:
+            ccw = int(ss[4]) # CCW degree
+        if len(ss) > 6:
+            group_idx = ss[6].split('.')[1]
         ya_save_one_page(vendor_name=vn,\
                          quo_number=qn,\
                          title=tt,\
                          page=page,\
-                         savePath=savePath)
+                         savePath=savePath,\
+                         ccw=ccw,\
+                         group_idx=group_idx)
         # print(f"to save file i={i},{qn},{vn},{tt}")
     doc.close()
-def checkPageInfosAgain(strs: list) -> list:
-
-    return None
+# Post processing of page infos, page by page
+#  Return format: {PageNo}\n{QuotationNo}\n{VendorName}\n{PaperTitle}\n{ccwDegree}\n{conf}\n{groupIndex}
+def postProcessPageInfos(strs: list) -> list:
+    pps = list()
+    qns = list()
+    vns = list()
+    tts = list()
+    remains = list()
+    for s in strs:
+        ss = s.split('\n')
+        item_num = len(ss)
+        pps.append(ss[0])  # Page No ...
+        qns.append(ss[1])  # Quotation no.
+        vns.append(ss[2])  # Vendor name
+        tts.append(ss[3])  # Paper title
+        # keep remaining page info
+        st = ''
+        for i in range(4, item_num):
+            st += f"{ss[i]}\n"
+        remains.append(st)
+    page_num = len(tts)
+    head = 0
+    tail = 0
+    # Iterate all pages to analyze
+    while tail<page_num:
+        tail += 1
+        transact_grouped = False
+        # To group a transaction
+        if tail >= page_num:
+            transact_grouped = True
+        elif tts[head]==tts[tail]:
+            transact_grouped = True
+        # A transaction has been grouped
+        if transact_grouped:
+            # To add group index at the end of page info
+            for i in range(head, tail):
+                grp_idx = i-head+1
+                remains[i] += f"GroupIdx.{grp_idx}"
+            # To check inconsistent vendor name
+            group_vns = vns[head:tail]
+            voc = list(set(group_vns)) # vocabulary
+            if len(voc)==1:
+                pass # Group vendor name is consistent
+            else:
+                # Inconsistent vendor names are found
+                #  Use vendor name on invoce as true vendor name
+                group_tts = tts[head:tail]
+                true_idx = 0
+                for s in group_tts:
+                    if "發票" in s:
+                        true_idx=group_tts.index(s)
+                        break
+                true_vn = group_vns[true_idx]
+                print(f"most_v={true_vn}") # Sort by value
+                for i in range(len(group_vns)):
+                    if group_vns[i] != true_vn:
+                        log = f"Caught inconsist vn at pp{head+1}-{tail}, correct from {group_vns}"
+                        group_vns[i] = true_vn
+                        print(f"{log} to {group_vns}")
+                vns[head:tail] = group_vns
+            head = tail
+    ret = list()
+    for i in range(page_num):
+        # TODO: add remaining page info back to the string
+        ret.append(f"{pps[i]}\n{qns[i]}\n{vns[i]}\n{tts[i]}\n{remains[i]}")
+    return ret
 def main():
     # Check the argv
     theArgc = len(sys.argv)
