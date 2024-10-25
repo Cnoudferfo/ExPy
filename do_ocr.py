@@ -486,6 +486,7 @@ def main():
                         do_plain=flags['plain'])
     # Initialize page index (counting from zero)
     i = 0
+    lst=list()
     while True:
         # Get ocr result sequentially page by page
         p = next(r)
@@ -493,11 +494,14 @@ def main():
         if not p:
             break
         else:
-            print(f"{p}")
+            lst.append(p)
         i += 1
         # Just in case
         if i > 1000:
             break
+    ll = postProcessPageInfos(lst)
+    for s in ll:
+        print(f"{s}")
     return 0
 
 if __name__ == "__main__":
