@@ -1,0 +1,10 @@
+{
+    "audio": {
+        "sampling rate": 44100,
+        "chunk size": 1024
+    },
+    "mic": {
+        "threshold in dB": 20
+    },
+    "save path": ".\\"
+}
