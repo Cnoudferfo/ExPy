@@ -8,7 +8,20 @@ node_modules/
 *.pdf
 *.ppt*
 *.jpg
+*.xls*
 
 # Ignore system files
 .DS_Store
 Thumbs.db
+
+# Ignore pycache
+*.pyc
+
+# Ignore audio/video data
+*.wav
+*.m4a
+
+# Ignore test directories
+asr_sample/
+testMonMeet/
+test_data/
