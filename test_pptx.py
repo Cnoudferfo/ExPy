@@ -43,11 +43,48 @@ class Prs(Presentation):
     def _copy_font(self, src:pptx.text.text._Run, dest:pptx.text.text._Run):
         src_font = src.font
         dest_font = dest.font
+        dest_font.size = src_font.size
+        dest_font.bold = src_font.bold
+        dest_font.italic = src_font.italic
+        dest_font.underline = src_font.underline
+        dest_font.color.rgb = src_font.color.rgb
+        dest_font.name = src_font.name
     
     def _substitute_a_text(self, shape:pptx.shapes.autoshape.Shape, new_text:str):
         text_frame = shape.text_frame
-        first_parag = text_frame.paragraphs[0]
-        first_run = first_parag.runs[0] if first_parag.runs else first_parag.add_run()
+        for paragraph in text_frame.paragraphs:
+            for run in paragraph.runs:
+                run.text = new_text
+                self._copy_font(run, run)
+    
+    def substitute_texts(self, text_substitutions:list):
+        for shape in self.slides[0].shapes:
+            if not shape.has_text_frame:
+                continue
+            for text_substitution in text_substitutions:
+                if shape.text_frame.text == text_substitution[0]:
+                    self._substitute_a_text(shape, text_substitution[1])
+                    break
+    
+    def go_through_all_shapes(self):
+        for slide in self._prs.slides:
+            for shape in slide.shapes:
+                print(f'{shape}')
+                if shape.has_text_frame:
+                    print(f'{shape.text_frame.text}')
+                    for paragraph in shape.text_frame.paragraphs:
+                        for run in paragraph.runs:
+                            print(f'{run.text}')
+                            print(f'{run.font.size}')
+                            print(f'{run.font.bold}')
+                            print(f'{run.font.italic}')
+                            print(f'{run.font.underline}')
+                            print(f'{run.font.color.rgb}')
+                            print(f'{run.font.name}')
+    
+    def save(self, output_filepath:str):
+        self.save(output_filepath)
+        
 prs = Presentation(".\\makeMonMeetPdf\\raw_main.pptx")
 
 for slide in prs.slides:
