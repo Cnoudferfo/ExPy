@@ -20,6 +20,10 @@ print(f'point 1, X={X}, Y={Y}')
 copy_ps(Y, X)
 print(f'point 2, X={X}, Y={Y}')
 
+''' See also
+  google : Take snapshot of powerpoint slides
+  google : SlideRange.Export (Powerpoint)
+'''
 import pptx
 from pptx import __version__ as v
 from pptx import Presentation
@@ -27,11 +31,6 @@ from pptx.enum.dml import MSO_COLOR_TYPE, MSO_FILL, MSO_FILL_TYPE
 import os
 
 print(f'pptx_version={v}') # 1.0.2
-import pptx.shapes
-import pptx.shapes.autoshape
-import pptx.text
-import pptx.text.text
-
 
 class Prs(Presentation):
     def __init__(self, template_filepath:str, text_substitutions:list):
